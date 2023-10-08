@@ -41,13 +41,24 @@ pub const WITNESS_SCALE_FACTOR: usize = 4;
 /// The maximum allowed number of signature check operations in a block.
 pub const MAX_BLOCK_SIGOPS_COST: i64 = 80_000;
 /// Mainnet (bitcoin) pubkey address prefix.
-pub const PUBKEY_ADDRESS_PREFIX_MAIN: u8 = 0; // 0x00
+// pub const PUBKEY_ADDRESS_PREFIX_MAIN: u8 = 0; // 0x00
 /// Mainnet (bitcoin) script address prefix.
-pub const SCRIPT_ADDRESS_PREFIX_MAIN: u8 = 5; // 0x05
+// pub const SCRIPT_ADDRESS_PREFIX_MAIN: u8 = 5; // 0x05
 /// Test (tesnet, signet, regtest) pubkey address prefix.
-pub const PUBKEY_ADDRESS_PREFIX_TEST: u8 = 111; // 0x6f
+// pub const PUBKEY_ADDRESS_PREFIX_TEST: u8 = 111; // 0x6f
 /// Test (tesnet, signet, regtest) script address prefix.
-pub const SCRIPT_ADDRESS_PREFIX_TEST: u8 = 196; // 0xc4
+// pub const SCRIPT_ADDRESS_PREFIX_TEST: u8 = 196; // 0xc4
+
+/// Mainnet (Qtum) pubkey address prefix.
+pub const PUBKEY_ADDRESS_PREFIX_MAIN_QTUM: u8 = 58; // 0x3a
+/// Mainnet (Qtum) script address prefix.
+pub const SCRIPT_ADDRESS_PREFIX_MAIN_QTUM: u8 = 50; // 0x32
+/// Testnet (Qtum) pubkey address prefix.
+pub const PUBKEY_ADDRESS_PREFIX_TEST_QTUM: u8 = 120; // 0x78
+/// Testnet (Qtum) script address prefix.
+pub const SCRIPT_ADDRESS_PREFIX_TEST_QTUM: u8 = 110; // 0x6e
+
+
 /// The maximum allowed script size.
 pub const MAX_SCRIPT_ELEMENT_SIZE: usize = 520;
 /// How may blocks between halvings.
@@ -61,6 +72,32 @@ pub const COINBASE_MATURITY: u32 = 100;
 /// since keeping everything below this value should prevent overflows
 /// if you are doing anything remotely sane with monetary values).
 pub const MAX_MONEY: u64 = 21_000_000 * COIN_VALUE;
+
+
+// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
+// Qtum Genesis Block params: CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount &genesisReward)
+// Qtum Mainnet: CreateGenesisBlock(1504695029, 8026361, 0x1f00ffff, 1, 50 * COIN);
+const GENESIS_BLOCK_TIME_QTUM_MAIN: u32 = 1504695029;
+const GENESIS_BLOCK_NONCE_QTUM_MAIN: u32 = 8026361;
+const GENESIS_BLOCK_BITS_QTUM_MAIN: u32 = 0x1f00ffff;
+// const GENESIS_BLOCK_VERSION_QTUM_MAIN: u32 = 1;
+// const GENESIS_BLOCK_REWARD_QTUM_MAIN: u64 = 50 * COIN_VALUE;
+// Qtum Testnet: CreateGenesisBlock(1504695029, 7349697, 0x1f00ffff, 1, 50 * COIN);
+const GENESIS_BLOCK_TIME_QTUM_TEST: u32 = 1504695029;
+const GENESIS_BLOCK_NONCE_QTUM_TEST: u32 = 7349697;
+const GENESIS_BLOCK_BITS_QTUM_TEST: u32 = 0x1f00ffff;
+// const GENESIS_BLOCK_VERSION_QTUM_TEST: u32 = 1;
+// const GENESIS_BLOCK_REWARD_QTUM_TEST: u64 = 50 * COIN_VALUE;
+// Qtum Signet: CreateGenesisBlock(1623662135, 7377285, 0x1f00ffff, 1, 50 * COIN);
+const GENESIS_BLOCK_TIME_QTUM_SIGNET: u32 = 1623662135;
+const GENESIS_BLOCK_NONCE_QTUM_SIGNET: u32 = 7377285;
+const GENESIS_BLOCK_BITS_QTUM_SIGNET: u32 = 0x1f00ffff;
+// const GENESIS_BLOCK_VERSION_QTUM_SIGNET: u32 = 1;
+// const GENESIS_BLOCK_REWARD_QTUM_SIGNET: u64 = 50 * COIN_VALUE;
+// Qtum Regtest: CreateGenesisBlock(1504695029, 17, 0x207fffff, 1, 50 * COIN);
+const GENESIS_BLOCK_TIME_QTUM_REGTEST: u32 = 1504695029;
+const GENESIS_BLOCK_NONCE_QTUM_REGTEST: u32 = 17;
+const GENESIS_BLOCK_BITS_QTUM_REGTEST: u32 = 0x207fffff;
 
 /// Constructs and returns the coinbase (and only) transaction of the Bitcoin genesis block.
 fn bitcoin_genesis_tx() -> Transaction {
@@ -105,15 +142,15 @@ pub fn genesis_block(network: Network) -> Block {
     let hash: sha256d::Hash = txdata[0].txid().into();
     let merkle_root = hash.into();
     match network {
-        Network::Bitcoin => {
+        Network::Qtum => {
             Block {
                 header: block::Header {
                     version: block::Version::ONE,
                     prev_blockhash: Hash::all_zeros(),
                     merkle_root,
-                    time: 1231006505,
-                    bits: CompactTarget::from_consensus(0x1d00ffff),
-                    nonce: 2083236893
+                    time: GENESIS_BLOCK_TIME_QTUM_MAIN,
+                    bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_MAIN),
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_MAIN
                 },
                 txdata,
             }
@@ -124,9 +161,9 @@ pub fn genesis_block(network: Network) -> Block {
                     version: block::Version::ONE,
                     prev_blockhash: Hash::all_zeros(),
                     merkle_root,
-                    time: 1296688602,
-                    bits: CompactTarget::from_consensus(0x1d00ffff),
-                    nonce: 414098458
+                    time: GENESIS_BLOCK_TIME_QTUM_TEST,
+                    bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_TEST),
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_TEST
                 },
                 txdata,
             }
@@ -137,9 +174,9 @@ pub fn genesis_block(network: Network) -> Block {
                     version: block::Version::ONE,
                     prev_blockhash: Hash::all_zeros(),
                     merkle_root,
-                    time: 1598918400,
-                    bits: CompactTarget::from_consensus(0x1e0377ae),
-                    nonce: 52613770
+                    time: GENESIS_BLOCK_TIME_QTUM_SIGNET,
+                    bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_SIGNET),
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_SIGNET
                 },
                 txdata,
             }
@@ -150,9 +187,9 @@ pub fn genesis_block(network: Network) -> Block {
                     version: block::Version::ONE,
                     prev_blockhash: Hash::all_zeros(),
                     merkle_root,
-                    time: 1296688602,
-                    bits: CompactTarget::from_consensus(0x207fffff),
-                    nonce: 2
+                    time: GENESIS_BLOCK_TIME_QTUM_REGTEST,
+                    bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_REGTEST),
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_REGTEST
                 },
                 txdata,
             }
@@ -167,22 +204,33 @@ impl_array_newtype!(ChainHash, u8, 32);
 impl_bytes_newtype!(ChainHash, 32);
 
 impl ChainHash {
-    // Mainnet value can be verified at https://github.com/lightning/bolts/blob/master/00-introduction.md
-    /// `ChainHash` for mainnet bitcoin.
-    pub const BITCOIN: Self = Self([111, 226, 140, 10, 182, 241, 179, 114, 193, 166, 162, 70, 174, 99, 247, 79, 147, 30, 131, 101, 225, 90, 8, 156, 104, 214, 25, 0, 0, 0, 0, 0]);
-    /// `ChainHash` for testnet bitcoin.
-    pub const TESTNET: Self = Self([67, 73, 127, 215, 248, 38, 149, 113, 8, 244, 163, 15, 217, 206, 195, 174, 186, 121, 151, 32, 132, 233, 14, 173, 1, 234, 51, 9, 0, 0, 0, 0]);
-    /// `ChainHash` for signet bitcoin.
-    pub const SIGNET: Self = Self([246, 30, 238, 59, 99, 163, 128, 164, 119, 160, 99, 175, 50, 178, 187, 201, 124, 159, 249, 240, 31, 44, 66, 37, 233, 115, 152, 129, 8, 0, 0, 0]);
-    /// `ChainHash` for regtest bitcoin.
-    pub const REGTEST: Self = Self([6, 34, 110, 70, 17, 26, 11, 89, 202, 175, 18, 96, 67, 235, 91, 191, 40, 195, 79, 58, 94, 51, 42, 31, 199, 178, 183, 60, 241, 136, 145, 15]);
+    /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
+    // Qtum Mainnet Genesis Block Hash: "0x000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c"
+    pub const QTUM: Self = Self([0, 0, 117, 174, 248, 60, 242, 133, 53, 128, 248, 174, 140, 230, 
+        248, 195, 9, 108, 250, 33, 217, 131, 52, 214, 227, 249, 94, 85, 130, 237, 152, 108
+        ]);
+    /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
+     // Qtum Testnet Genesis Block Hash: "0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"
+    pub const TESTNET: Self = Self([0, 0, 232, 3, 238, 33, 92, 6, 132, 202, 13, 47, 146, 32, 89,
+        77, 63, 130, 134, 23, 151, 42, 173, 102, 254, 178, 186, 81, 245, 225, 66, 34
+        ]);
+    /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
+     // Qtum Signet Genesis Block Hash: "0xed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d"
+    pub const SIGNET: Self = Self([237, 52, 5, 14, 181, 144, 158, 229, 53, 252, 176, 122, 242, 146, 
+        234, 85, 243, 210, 242, 145, 24, 118, 23, 180, 77, 50, 130, 35, 20, 5, 185, 109
+        ]);
+    /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
+    // Qtum Regtest Genesis Block Hash: "0x665ed5b402ac0b44efc37d8926332994363e8a7278b7ee9a58fb972efadae943"
+    pub const REGTEST: Self = Self([102, 94, 213, 180, 2, 172, 11, 68, 239, 195, 125, 137, 38, 51, 
+        41, 148, 54, 62, 138, 114, 120, 183, 238, 154, 88, 251, 151, 46, 250, 218, 233, 67
+        ]);
 
     /// Returns the hash of the `network` genesis block for use as a chain hash.
     ///
     /// See [BOLT 0](https://github.com/lightning/bolts/blob/ffeece3dab1c52efdb9b53ae476539320fa44938/00-introduction.md#chain_hash)
     /// for specification.
     pub const fn using_genesis_block(network: Network) -> Self {
-        let hashes = [Self::BITCOIN, Self::TESTNET, Self::SIGNET, Self::REGTEST];
+        let hashes = [Self::QTUM, Self::TESTNET, Self::SIGNET, Self::REGTEST];
         hashes[network as usize]
     }
 }
@@ -218,7 +266,7 @@ mod test {
 
     #[test]
     fn bitcoin_genesis_full_block() {
-        let gen = genesis_block(Network::Bitcoin);
+        let gen = genesis_block(Network::Qtum);
 
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
@@ -272,7 +320,7 @@ mod test {
         assert_eq!(got, want);
 
         match network {
-            Network::Bitcoin => {},
+            Network::Qtum => {},
             Network::Testnet => {},
             Network::Signet => {},
             Network::Regtest => {},
@@ -292,7 +340,7 @@ mod test {
     }
 
     chain_hash_genesis_block! {
-        mainnet_chain_hash_genesis_block, Network::Bitcoin;
+        mainnet_chain_hash_genesis_block, Network::Qtum;
         testnet_chain_hash_genesis_block, Network::Testnet;
         signet_chain_hash_genesis_block, Network::Signet;
         regtest_chain_hash_genesis_block, Network::Regtest;
@@ -301,7 +349,7 @@ mod test {
     // Test vector taken from: https://github.com/lightning/bolts/blob/master/00-introduction.md
     #[test]
     fn mainnet_chain_hash_test_vector() {
-        let got = ChainHash::using_genesis_block(Network::Bitcoin).to_string();
+        let got = ChainHash::using_genesis_block(Network::Qtum).to_string();
         let want = "6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000";
         assert_eq!(got, want);
     }

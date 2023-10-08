@@ -1669,7 +1669,7 @@ mod tests {
 
     fn p2pkh_hex(pk: &str) -> ScriptBuf {
         let pk: PublicKey = PublicKey::from_str(pk).unwrap();
-        Address::p2pkh(&pk, Network::Bitcoin).script_pubkey()
+        Address::p2pkh(&pk, Network::Qtum).script_pubkey()
     }
 
     #[test]

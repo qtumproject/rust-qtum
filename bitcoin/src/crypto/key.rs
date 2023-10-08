@@ -359,7 +359,7 @@ impl PrivateKey {
     pub fn fmt_wif(&self, fmt: &mut dyn fmt::Write) -> fmt::Result {
         let mut ret = [0; 34];
         ret[0] = match self.network {
-            Network::Bitcoin => 128,
+            Network::Qtum => 128,
             Network::Testnet | Network::Signet | Network::Regtest => 239,
         };
         ret[1..33].copy_from_slice(&self.inner[..]);
@@ -393,7 +393,7 @@ impl PrivateKey {
         };
 
         let network = match data[0] {
-            128 => Network::Bitcoin,
+            128 => Network::Qtum,
             239 => Network::Testnet,
             x   => {
                 return Err(Error::Base58(base58::Error::InvalidAddressVersion(x)));
@@ -769,7 +769,7 @@ mod tests {
     use crate::hashes::hex::FromHex;
     use crate::io;
     use crate::network::constants::Network::Testnet;
-    use crate::network::constants::Network::Bitcoin;
+    use crate::network::constants::Network::Qtum;
 
     #[test]
     fn test_key_derivation() {
@@ -791,7 +791,7 @@ mod tests {
 
         // mainnet uncompressed
         let sk = PrivateKey::from_wif("5JYkZjmN7PVMjJUfJWfRFwtuXTGB439XV6faajeHPAM9Z2PT2R3").unwrap();
-        assert_eq!(sk.network, Bitcoin);
+        assert_eq!(sk.network, Qtum);
         assert!(!sk.compressed);
         assert_eq!(&sk.to_wif(), "5JYkZjmN7PVMjJUfJWfRFwtuXTGB439XV6faajeHPAM9Z2PT2R3");
 

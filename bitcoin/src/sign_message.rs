@@ -247,14 +247,14 @@ mod tests {
         assert!(pubkey.compressed);
         assert_eq!(pubkey.inner, secp256k1::PublicKey::from_secret_key(&secp, &privkey));
 
-        let p2pkh = Address::p2pkh(&pubkey, Network::Bitcoin);
+        let p2pkh = Address::p2pkh(&pubkey, Network::Qtum);
         assert_eq!(signature2.is_signed_by_address(&secp, &p2pkh, msg_hash), Ok(true));
-        let p2wpkh = Address::p2wpkh(&pubkey, Network::Bitcoin).unwrap();
+        let p2wpkh = Address::p2wpkh(&pubkey, Network::Qtum).unwrap();
         assert_eq!(
             signature2.is_signed_by_address(&secp, &p2wpkh, msg_hash),
             Err(MessageSignatureError::UnsupportedAddressType(AddressType::P2wpkh))
         );
-        let p2shwpkh = Address::p2shwpkh(&pubkey, Network::Bitcoin).unwrap();
+        let p2shwpkh = Address::p2shwpkh(&pubkey, Network::Qtum).unwrap();
         assert_eq!(
             signature2.is_signed_by_address(&secp, &p2shwpkh, msg_hash),
             Err(MessageSignatureError::UnsupportedAddressType(AddressType::P2sh))
@@ -283,7 +283,7 @@ mod tests {
         let pubkey = PublicKey::from_slice(&base64::decode(pubkey_base64).expect("base64 string"))
             .expect("pubkey slice");
 
-        let p2pkh = Address::p2pkh(&pubkey, Network::Bitcoin);
+        let p2pkh = Address::p2pkh(&pubkey, Network::Qtum);
         assert_eq!(signature.is_signed_by_address(&secp, &p2pkh, msg_hash), Ok(false));
     }
 }

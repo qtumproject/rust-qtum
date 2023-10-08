@@ -676,7 +676,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn serialize_verack_test() {
-        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Bitcoin), payload: NetworkMessage::Verack }),
+        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Qtum), payload: NetworkMessage::Verack }),
                    vec![0xf9, 0xbe, 0xb4, 0xd9, 0x76, 0x65, 0x72, 0x61,
                         0x63, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00, 0x5d, 0xf6, 0xe0, 0xe2]);
@@ -685,7 +685,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn serialize_ping_test() {
-        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Bitcoin), payload: NetworkMessage::Ping(100) }),
+        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Qtum), payload: NetworkMessage::Ping(100) }),
                    vec![0xf9, 0xbe, 0xb4, 0xd9, 0x70, 0x69, 0x6e, 0x67,
                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                         0x08, 0x00, 0x00, 0x00, 0x24, 0x67, 0xf1, 0x1d,
@@ -695,7 +695,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn serialize_mempool_test() {
-        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Bitcoin), payload: NetworkMessage::MemPool }),
+        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Qtum), payload: NetworkMessage::MemPool }),
                    vec![0xf9, 0xbe, 0xb4, 0xd9, 0x6d, 0x65, 0x6d, 0x70,
                         0x6f, 0x6f, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00, 0x5d, 0xf6, 0xe0, 0xe2]);
@@ -704,7 +704,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn serialize_getaddr_test() {
-        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Bitcoin), payload: NetworkMessage::GetAddr }),
+        assert_eq!(serialize(&RawNetworkMessage { magic: Magic::from(Network::Qtum), payload: NetworkMessage::GetAddr }),
                    vec![0xf9, 0xbe, 0xb4, 0xd9, 0x67, 0x65, 0x74, 0x61,
                         0x64, 0x64, 0x72, 0x00, 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00, 0x5d, 0xf6, 0xe0, 0xe2]);
@@ -719,7 +719,7 @@ mod test {
             0x00, 0x00, 0x00, 0x00, 0x5d, 0xf6, 0xe0, 0xe2
         ]);
         let preimage = RawNetworkMessage {
-            magic: Magic::from(Network::Bitcoin),
+            magic: Magic::from(Network::Qtum),
             payload: NetworkMessage::GetAddr,
         };
         assert!(msg.is_ok());
@@ -752,7 +752,7 @@ mod test {
 
         assert!(msg.is_ok());
         let msg = msg.unwrap();
-        assert_eq!(msg.magic, Magic::from(Network::Bitcoin));
+        assert_eq!(msg.magic, Magic::from(Network::Qtum));
         if let NetworkMessage::Version(version_msg) = msg.payload {
             assert_eq!(version_msg.version, 70015);
             assert_eq!(
@@ -798,7 +798,7 @@ mod test {
 
         let (msg, consumed) = msg.unwrap();
         assert_eq!(consumed, data.to_vec().len() - 2);
-        assert_eq!(msg.magic, Magic::from(Network::Bitcoin));
+        assert_eq!(msg.magic, Magic::from(Network::Qtum));
         if let NetworkMessage::Version(version_msg) = msg.payload {
             assert_eq!(version_msg.version, 70015);
             assert_eq!(
