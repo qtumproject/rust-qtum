@@ -25,8 +25,62 @@ use crate::VarInt;
 use crate::internal_macros::impl_consensus_encoding;
 use crate::io;
 use super::Weight;
+// #[cfg(feature = "serde")]
+// use serde::{Serialize, Deserialize};
 
 pub use crate::hash_types::BlockHash;
+
+/// Blockflag is used to indicate the type of block in Qtum
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BlockFlag {
+    /// Proof of work Qtum block
+    ProofOfWork,
+    /// Proof of stake Qtum block
+    ProofOfStake,
+}
+
+// ! Implement Encodable and Decodable for BlockFlag
+impl Encodable for BlockFlag {
+    fn consensus_encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
+        match self {
+            BlockFlag::ProofOfWork => 0u8.consensus_encode(w),
+            BlockFlag::ProofOfStake => 1u8.consensus_encode(w),
+        }
+    }
+}
+
+impl Decodable for BlockFlag {
+    fn consensus_decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, encode::Error> {
+        let flag = u8::consensus_decode(r)?;
+        match flag {
+            0 => Ok(BlockFlag::ProofOfWork),
+            1 => Ok(BlockFlag::ProofOfStake),
+            _ => Err(encode::Error::ParseFailed("Invalid block flag")),
+        }
+    }
+}
+// ! Implement Serialize and Deserialize for BlockFlag
+#[cfg(feature = "serde")]
+impl serde::Serialize for BlockFlag {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        match self {
+            BlockFlag::ProofOfWork => s.serialize_u8(0),
+            BlockFlag::ProofOfStake => s.serialize_u8(1),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for BlockFlag {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let flag = u8::deserialize(d)?;
+        match flag {
+            0 => Ok(BlockFlag::ProofOfWork),
+            1 => Ok(BlockFlag::ProofOfStake),
+            _ => Err(serde::de::Error::custom("Invalid block flag")),
+        }
+    }
+}
 
 /// Bitcoin block header.
 ///
@@ -54,9 +108,16 @@ pub struct Header {
     pub bits: CompactTarget,
     /// The nonce, selected to obtain a low enough blockhash.
     pub nonce: u32,
+    // start of qtum specific fields
+    pub hash_state_root: BlockHash,
+    pub hash_utxo_root: BlockHash,
+    pub flags: BlockFlag,
+    pub proofhash: BlockHash,
+    pub modifier: BlockHash,
+    // end of qtum specific block fields
 }
 
-impl_consensus_encoding!(Header, version, prev_blockhash, merkle_root, time, bits, nonce);
+impl_consensus_encoding!(Header, version, prev_blockhash, merkle_root, time, bits, nonce, hash_state_root, hash_utxo_root, flags, proofhash, modifier);
 
 impl Header {
     /// Returns the block hash.

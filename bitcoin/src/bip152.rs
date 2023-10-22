@@ -404,6 +404,13 @@ mod test {
                 time: 2,
                 bits: CompactTarget::from_consensus(3),
                 nonce: 4,
+                // qtum specific fields
+                // ! CHANGE THIS WITH REAL QTUM BLOCK HASHES !
+                hash_state_root: BlockHash::hash(&[0]),
+                hash_utxo_root: BlockHash::hash(&[0]),
+                proofhash: BlockHash::hash(&[0]),
+                flags: block::BlockFlag::ProofOfStake,
+                modifier:BlockHash::hash(&[0]), 
             },
             txdata: vec![dummy_tx(&[2]), dummy_tx(&[3]), dummy_tx(&[4])],
         }

@@ -1135,7 +1135,7 @@ impl Decodable for Transaction {
             let segwit_flag = u8::consensus_decode_from_finite_reader(r)?;
             match segwit_flag {
                 // BIP144 input witnesses
-                1 => {
+                0|1 => {
                     let mut input = Vec::<TxIn>::consensus_decode_from_finite_reader(r)?;
                     let output = Vec::<TxOut>::consensus_decode_from_finite_reader(r)?;
                     for txin in input.iter_mut() {

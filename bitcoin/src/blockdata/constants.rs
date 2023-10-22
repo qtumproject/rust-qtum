@@ -150,7 +150,13 @@ pub fn genesis_block(network: Network) -> Block {
                     merkle_root,
                     time: GENESIS_BLOCK_TIME_QTUM_MAIN,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_MAIN),
-                    nonce: GENESIS_BLOCK_NONCE_QTUM_MAIN
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_MAIN,
+                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
+                    hash_state_root: Hash::all_zeros(),
+                    hash_utxo_root: Hash::all_zeros(),
+                    proofhash: Hash::all_zeros(),
+                    flags: block::BlockFlag::ProofOfStake,
+                    modifier: Hash::all_zeros(),
                 },
                 txdata,
             }
@@ -163,7 +169,13 @@ pub fn genesis_block(network: Network) -> Block {
                     merkle_root,
                     time: GENESIS_BLOCK_TIME_QTUM_TEST,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_TEST),
-                    nonce: GENESIS_BLOCK_NONCE_QTUM_TEST
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_TEST,
+                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
+                    hash_state_root: Hash::all_zeros(),
+                    hash_utxo_root: Hash::all_zeros(),
+                    proofhash: Hash::all_zeros(),
+                    flags: block::BlockFlag::ProofOfStake,
+                    modifier: Hash::all_zeros(),
                 },
                 txdata,
             }
@@ -176,7 +188,13 @@ pub fn genesis_block(network: Network) -> Block {
                     merkle_root,
                     time: GENESIS_BLOCK_TIME_QTUM_SIGNET,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_SIGNET),
-                    nonce: GENESIS_BLOCK_NONCE_QTUM_SIGNET
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_SIGNET,
+                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
+                    hash_state_root: Hash::all_zeros(),
+                    hash_utxo_root: Hash::all_zeros(),
+                    proofhash: Hash::all_zeros(),
+                    flags: block::BlockFlag::ProofOfStake,
+                    modifier: Hash::all_zeros(),
                 },
                 txdata,
             }
@@ -189,7 +207,13 @@ pub fn genesis_block(network: Network) -> Block {
                     merkle_root,
                     time: GENESIS_BLOCK_TIME_QTUM_REGTEST,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_REGTEST),
-                    nonce: GENESIS_BLOCK_NONCE_QTUM_REGTEST
+                    nonce: GENESIS_BLOCK_NONCE_QTUM_REGTEST,
+                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
+                    hash_state_root: Hash::all_zeros(),
+                    hash_utxo_root: Hash::all_zeros(),
+                    proofhash: Hash::all_zeros(),
+                    flags: block::BlockFlag::ProofOfStake,
+                    modifier: Hash::all_zeros(),
                 },
                 txdata,
             }
