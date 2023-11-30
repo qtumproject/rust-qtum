@@ -154,9 +154,8 @@ pub fn genesis_block(network: Network) -> Block {
                     // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
                     hash_state_root: Hash::all_zeros(),
                     hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -173,9 +172,8 @@ pub fn genesis_block(network: Network) -> Block {
                     // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
                     hash_state_root: Hash::all_zeros(),
                     hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -192,9 +190,8 @@ pub fn genesis_block(network: Network) -> Block {
                     // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
                     hash_state_root: Hash::all_zeros(),
                     hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -211,9 +208,8 @@ pub fn genesis_block(network: Network) -> Block {
                     // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
                     hash_state_root: Hash::all_zeros(),
                     hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }

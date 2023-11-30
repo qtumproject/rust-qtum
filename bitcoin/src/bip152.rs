@@ -235,7 +235,7 @@ impl HeaderAndShortIds {
         }
 
         Ok(HeaderAndShortIds {
-            header: block.header,
+            header: block.header.clone(), // qtum: clone block header
             nonce,
             // Provide coinbase prefilled.
             prefilled_txs: prefilled,
@@ -405,12 +405,11 @@ mod test {
                 bits: CompactTarget::from_consensus(3),
                 nonce: 4,
                 // qtum specific fields
-                // ! CHANGE THIS WITH REAL QTUM BLOCK HASHES !
-                hash_state_root: BlockHash::hash(&[0]),
-                hash_utxo_root: BlockHash::hash(&[0]),
-                proofhash: BlockHash::hash(&[0]),
-                flags: block::BlockFlag::ProofOfStake,
-                modifier:BlockHash::hash(&[0]), 
+                // ! CHANGE THIS WITH REAL QTUM VALUES !
+                hash_state_root: Hash::all_zeros(),
+                hash_utxo_root: Hash::all_zeros(),
+                prevout_stake: OutPoint::null(),
+                signature: vec![],
             },
             txdata: vec![dummy_tx(&[2]), dummy_tx(&[3]), dummy_tx(&[4])],
         }

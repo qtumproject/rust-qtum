@@ -18,7 +18,7 @@ use crate::error::Error::{self, BlockBadTarget, BlockBadProofOfWork};
 use crate::hashes::{Hash, HashEngine};
 use crate::hash_types::{Wtxid, TxMerkleNode, WitnessMerkleNode, WitnessCommitment};
 use crate::consensus::{encode, Encodable, Decodable};
-use crate::blockdata::transaction::Transaction;
+use crate::blockdata::transaction::{OutPoint, Transaction};
 use crate::blockdata::script;
 use crate::pow::{CompactTarget, Target, Work};
 use crate::VarInt;
@@ -92,7 +92,7 @@ impl<'de> serde::Deserialize<'de> for BlockFlag {
 /// ### Bitcoin Core References
 ///
 /// * [CBlockHeader definition](https://github.com/bitcoin/bitcoin/blob/345457b542b6a980ccfbc868af0970a6f91d1b82/src/primitives/block.h#L20)
-#[derive(Copy, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "actual_serde"))]
 pub struct Header {
@@ -109,15 +109,18 @@ pub struct Header {
     /// The nonce, selected to obtain a low enough blockhash.
     pub nonce: u32,
     // start of qtum specific fields
+    /// Qtum: hashStateRoot
     pub hash_state_root: BlockHash,
+    /// Qtum: hashUTXORoot
     pub hash_utxo_root: BlockHash,
-    pub flags: BlockFlag,
-    pub proofhash: BlockHash,
-    pub modifier: BlockHash,
+    /// Qtum: prevoutStake
+    pub prevout_stake: OutPoint,
+    /// Qtum: vchBlockSigDlgt
+    pub signature: Vec<u8>,
     // end of qtum specific block fields
 }
 
-impl_consensus_encoding!(Header, version, prev_blockhash, merkle_root, time, bits, nonce, hash_state_root, hash_utxo_root, flags, proofhash, modifier);
+impl_consensus_encoding!(Header, version, prev_blockhash, merkle_root, time, bits, nonce, hash_state_root, hash_utxo_root, prevout_stake, signature);
 
 impl Header {
     /// Returns the block hash.
