@@ -99,7 +99,7 @@ const GENESIS_BLOCK_TIME_QTUM_REGTEST: u32 = 1504695029;
 const GENESIS_BLOCK_NONCE_QTUM_REGTEST: u32 = 17;
 const GENESIS_BLOCK_BITS_QTUM_REGTEST: u32 = 0x207fffff;
 
-/// Constructs and returns the coinbase (and only) transaction of the Bitcoin genesis block.
+/// Constructs and returns the coinbase (and only) transaction of the Qtum genesis block.
 fn bitcoin_genesis_tx() -> Transaction {
     // Base
     let mut ret = Transaction {
@@ -110,9 +110,10 @@ fn bitcoin_genesis_tx() -> Transaction {
     };
 
     // Inputs
-    let in_script = script::Builder::new().push_int(486604799)
+    let in_script = script::Builder::new().push_opcode(crate::opcodes::OP_0)
+                                          .push_int(488804799)
                                           .push_int_non_minimal(4)
-                                          .push_slice(b"The Times 03/Jan/2009 Chancellor on brink of second bailout for banks")
+                                          .push_slice(b"Sep 02, 2017 Bitcoin breaks $5,000 in latest price frenzy")
                                           .into_script();
     ret.input.push(TxIn {
         previous_output: OutPoint::null(),
@@ -122,7 +123,7 @@ fn bitcoin_genesis_tx() -> Transaction {
     });
 
     // Outputs
-    let script_bytes = hex!("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f");
+    let script_bytes = hex!("040d61d8653448c98731ee5fffd303c15e71ec2057b77f11ab3601979728cdaff2d68afbba14e4fa0bc44f2072b0b23ef63717f8cdfbe58dcd33f32b6afe98741a");
     let out_script = script::Builder::new()
         .push_slice(script_bytes)
         .push_opcode(OP_CHECKSIG)
