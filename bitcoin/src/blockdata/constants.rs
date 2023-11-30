@@ -291,12 +291,16 @@ mod test {
 
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
-        assert_eq!(gen.header.merkle_root.to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
+        assert_eq!(gen.header.merkle_root.to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
 
-        assert_eq!(gen.header.time, 1231006505);
-        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1d00ffff));
-        assert_eq!(gen.header.nonce, 2083236893);
-        assert_eq!(gen.header.block_hash().to_string(), "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
+        assert_eq!(gen.header.time, 1504695029);
+        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
+        assert_eq!(gen.header.nonce, 8026361);
+        assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
+        assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
+        assert_eq!(gen.header.prevout_stake, OutPoint::null());
+        assert_eq!(gen.header.signature, Vec::<u8>::new());
+        assert_eq!(gen.header.block_hash().to_string(), "000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c");
     }
 
     #[test]
@@ -304,11 +308,15 @@ mod test {
         let gen = genesis_block(Network::Testnet);
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
-        assert_eq!(gen.header.merkle_root.to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
-        assert_eq!(gen.header.time, 1296688602);
-        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1d00ffff));
-        assert_eq!(gen.header.nonce, 414098458);
-        assert_eq!(gen.header.block_hash().to_string(), "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943");
+        assert_eq!(gen.header.merkle_root.to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
+        assert_eq!(gen.header.time, 1504695029);
+        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
+        assert_eq!(gen.header.nonce, 7349697);
+        assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
+        assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
+        assert_eq!(gen.header.prevout_stake, OutPoint::null());
+        assert_eq!(gen.header.signature, Vec::<u8>::new());
+        assert_eq!(gen.header.block_hash().to_string(), "0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222");
     }
 
     #[test]
@@ -316,11 +324,15 @@ mod test {
         let gen = genesis_block(Network::Signet);
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
-        assert_eq!(gen.header.merkle_root.to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
-        assert_eq!(gen.header.time, 1598918400);
-        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1e0377ae));
-        assert_eq!(gen.header.nonce, 52613770);
-        assert_eq!(gen.header.block_hash().to_string(), "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6");
+        assert_eq!(gen.header.merkle_root.to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
+        assert_eq!(gen.header.time, 1623662135);
+        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
+        assert_eq!(gen.header.nonce, 7377285);
+        assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
+        assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
+        assert_eq!(gen.header.prevout_stake, OutPoint::null());
+        assert_eq!(gen.header.signature, Vec::<u8>::new());
+        assert_eq!(gen.header.block_hash().to_string(), "0000e0d4bc95abd1c0fcef0abb2795b6e8525f406262d59dc60cd3c490641347");
     }
 
     // The *_chain_hash tests are sanity/regression tests, they verify that the const byte array
