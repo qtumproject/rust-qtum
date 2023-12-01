@@ -232,23 +232,23 @@ impl_bytes_newtype!(ChainHash, 32);
 impl ChainHash {
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
     // Qtum Mainnet Genesis Block Hash: "0x000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c"
-    pub const QTUM: Self = Self([0, 0, 117, 174, 248, 60, 242, 133, 53, 128, 248, 174, 140, 230, 
-        248, 195, 9, 108, 250, 33, 217, 131, 52, 214, 227, 249, 94, 85, 130, 237, 152, 108
+    pub const QTUM: Self = Self([108, 152, 237, 130, 85, 94, 249, 227, 214, 52, 131, 217, 33,
+        250, 108, 9, 195, 248, 230, 140, 174, 248, 128, 53, 133, 242, 60, 248, 174, 117, 0, 0
         ]);
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
-     // Qtum Testnet Genesis Block Hash: "0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"
-    pub const TESTNET: Self = Self([0, 0, 232, 3, 238, 33, 92, 6, 132, 202, 13, 47, 146, 32, 89,
-        77, 63, 130, 134, 23, 151, 42, 173, 102, 254, 178, 186, 81, 245, 225, 66, 34
+    // Qtum Testnet Genesis Block Hash: "0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"
+    pub const TESTNET: Self = Self([34, 66, 225, 245, 81, 186, 178, 254, 102, 173, 42, 151, 23,
+        134, 130, 63, 77, 89, 32, 146, 47, 13, 202, 132, 6, 92, 33, 238, 3, 232, 0, 0
         ]);
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
-     // Qtum Signet Genesis Block Hash: "0xed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d"
-    pub const SIGNET: Self = Self([237, 52, 5, 14, 181, 144, 158, 229, 53, 252, 176, 122, 242, 146, 
-        234, 85, 243, 210, 242, 145, 24, 118, 23, 180, 77, 50, 130, 35, 20, 5, 185, 109
+    // Qtum Signet Genesis Block Hash: "0x0000e0d4bc95abd1c0fcef0abb2795b6e8525f406262d59dc60cd3c490641347"
+    pub const SIGNET: Self = Self([71, 19, 100, 144, 196, 211, 12, 198, 157, 213, 98, 98, 64, 95,
+        82, 232, 182, 149, 39, 187, 10, 239, 252, 192, 209, 171, 149, 188, 212, 224, 0, 0
         ]);
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
     // Qtum Regtest Genesis Block Hash: "0x665ed5b402ac0b44efc37d8926332994363e8a7278b7ee9a58fb972efadae943"
-    pub const REGTEST: Self = Self([102, 94, 213, 180, 2, 172, 11, 68, 239, 195, 125, 137, 38, 51, 
-        41, 148, 54, 62, 138, 114, 120, 183, 238, 154, 88, 251, 151, 46, 250, 218, 233, 67
+    pub const REGTEST: Self = Self([67, 233, 218, 250, 46, 151, 251, 88, 154, 238, 183, 120, 114,
+        138, 62, 54, 148, 41, 51, 38, 137, 125, 195, 239, 68, 11, 172, 2, 180, 213, 94, 102
         ]);
 
     /// Returns the hash of the `network` genesis block for use as a chain hash.
@@ -387,7 +387,7 @@ mod test {
     #[test]
     fn mainnet_chain_hash_test_vector() {
         let got = ChainHash::using_genesis_block(Network::Qtum).to_string();
-        let want = "6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000";
+        let want = "6c98ed82555ef9e3d63483d921fa6c09c3f8e68caef8803585f23cf8ae750000";
         assert_eq!(got, want);
     }
 }
