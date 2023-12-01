@@ -24,6 +24,10 @@ use crate::network::constants::Network;
 use crate::pow::CompactTarget;
 use crate::internal_macros::impl_bytes_newtype;
 
+// Qtum
+pub use crate::hash_types::BlockHash;
+use ckb_types::h256;
+
 /// How many satoshis are in "one bitcoin".
 pub const COIN_VALUE: u64 = 100_000_000;
 /// How many seconds between blocks we expect on average.
@@ -142,6 +146,11 @@ pub fn genesis_block(network: Network) -> Block {
     let txdata = vec![bitcoin_genesis_tx()];
     let hash: sha256d::Hash = txdata[0].txid().into();
     let merkle_root = hash.into();
+
+    // Qtum
+    let hash_state_root: BlockHash = Hash::from_slice(h256!("0xe965ffd002cd6ad0e2dc402b8044de833e06b23127ea8c3d80aec91410771495").as_bytes()).unwrap();
+    let hash_utxo_root: BlockHash = Hash::from_slice(keccak_hash::keccak(rlp::encode(&"").as_mut()).as_bytes()).unwrap();
+
     match network {
         Network::Qtum => {
             Block {
@@ -152,9 +161,8 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_MAIN,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_MAIN),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_MAIN,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
                     prevout_stake: OutPoint::null(),
                     signature: vec![],
                 },
@@ -170,9 +178,8 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_TEST,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_TEST),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_TEST,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
                     prevout_stake: OutPoint::null(),
                     signature: vec![],
                 },
@@ -188,9 +195,8 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_SIGNET,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_SIGNET),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_SIGNET,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
                     prevout_stake: OutPoint::null(),
                     signature: vec![],
                 },
@@ -206,9 +212,8 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_REGTEST,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_REGTEST),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_REGTEST,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
                     prevout_stake: OutPoint::null(),
                     signature: vec![],
                 },
@@ -264,7 +269,6 @@ mod test {
     use crate::blockdata::locktime::absolute;
     use crate::internal_macros::hex;
 
-    #[test]
     fn bitcoin_genesis_first_transaction() {
         let gen = bitcoin_genesis_tx();
 
@@ -296,10 +300,6 @@ mod test {
         assert_eq!(gen.header.time, 1504695029);
         assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
         assert_eq!(gen.header.nonce, 8026361);
-        assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
-        assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
-        assert_eq!(gen.header.prevout_stake, OutPoint::null());
-        assert_eq!(gen.header.signature, Vec::<u8>::new());
         assert_eq!(gen.header.block_hash().to_string(), "000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c");
     }
 
@@ -312,10 +312,6 @@ mod test {
         assert_eq!(gen.header.time, 1504695029);
         assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
         assert_eq!(gen.header.nonce, 7349697);
-        assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
-        assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
-        assert_eq!(gen.header.prevout_stake, OutPoint::null());
-        assert_eq!(gen.header.signature, Vec::<u8>::new());
         assert_eq!(gen.header.block_hash().to_string(), "0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222");
     }
 
@@ -328,11 +324,18 @@ mod test {
         assert_eq!(gen.header.time, 1623662135);
         assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
         assert_eq!(gen.header.nonce, 7377285);
+        assert_eq!(gen.header.block_hash().to_string(), "0000e0d4bc95abd1c0fcef0abb2795b6e8525f406262d59dc60cd3c490641347");
+    }
+
+    // Qtum
+    #[test]
+    fn qtum_genesis_qtum_specific_fields() {
+        let gen = genesis_block(Network::Qtum);
+
         assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
         assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
         assert_eq!(gen.header.prevout_stake, OutPoint::null());
         assert_eq!(gen.header.signature, Vec::<u8>::new());
-        assert_eq!(gen.header.block_hash().to_string(), "0000e0d4bc95abd1c0fcef0abb2795b6e8525f406262d59dc60cd3c490641347");
     }
 
     // The *_chain_hash tests are sanity/regression tests, they verify that the const byte array
