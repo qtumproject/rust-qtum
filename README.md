@@ -1,3 +1,24 @@
+# Rust Qtum
+
+This repository was forked from [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) in an effort to work with Qtum in Rust.
+
+**WORK IN PROGRESS.**
+
+### Supports (or should support)
+
+* De/serialization of Qtum protocol network messages
+* De/serialization of blocks and transactions
+* Script de/serialization
+* Private keys and address creation, de/serialization and validation (including full BIP32 support)
+* PSBT v0 de/serialization and all but the Input Finalizer role. Use [rust-miniscript](https://docs.rs/miniscript/latest/miniscript/psbt/index.html) to finalize.
+
+For JSONRPC interaction with Qtum Core, it is recommended to use
+[rust-qtumcore-rpc](https://github.com/qtumproject/rust-qtumcore-rpc).
+
+See below for the original Bitcoin README.
+
+---
+
 <div align="center">
   <h1>Rust Bitcoin</h1>
 
