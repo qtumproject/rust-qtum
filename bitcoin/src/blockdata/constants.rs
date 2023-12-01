@@ -269,6 +269,7 @@ mod test {
     use crate::blockdata::locktime::absolute;
     use crate::internal_macros::hex;
 
+    #[test]
     fn bitcoin_genesis_first_transaction() {
         let gen = bitcoin_genesis_tx();
 
