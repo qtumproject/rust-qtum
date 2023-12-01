@@ -660,11 +660,11 @@ mod tests {
     #[test]
     fn merkleblock_serialization() {
         // Got it by running the rpc call
-        // `gettxoutproof '["220ebc64e21abece964927322cba69180ed853bb187fbc6923bac7d010b9d87a"]'`
+        // `gettxoutproof '["8585dc51bde30419633cf20ef943d7ea8505ffa23d493d35650c62093f7a331e"]'`
         let mb_hex = include_str!("../../tests/data/merkle_block.hex");
 
         let mb: MerkleBlock = deserialize(&hex!(mb_hex)).unwrap();
-        assert_eq!(get_block_13b8a().block_hash(), mb.header.block_hash());
+        assert_eq!(get_block_c88df().block_hash(), mb.header.block_hash());
         assert_eq!(
             mb.header.merkle_root,
             mb.txn.extract_matches(&mut vec![], &mut vec![]).unwrap()
@@ -677,11 +677,11 @@ mod tests {
     /// given block.
     #[test]
     fn merkleblock_construct_from_txids_found() {
-        let block = get_block_13b8a();
+        let block = get_block_c88df();
 
         let txids: Vec<Txid> = [
-            "74d681e0e03bafa802c8aa084379aa98d9fcd632ddc2ed9782b586ec87451f20",
-            "f9fc751cb7dc372406a9f8d738d5e6f8f63bab71986a39cf36ee70ee17036d07",
+            "8585dc51bde30419633cf20ef943d7ea8505ffa23d493d35650c62093f7a331e",
+            "de3a176ad8e33e23a0dc5a0798c6e23bd7c411777a6ccf8c95cb4d122123bac2",
         ]
         .iter()
         .map(|hex| hex.parse::<Txid>().unwrap())
@@ -709,13 +709,13 @@ mod tests {
         assert_eq!(index[0], 1);
 
         assert_eq!(matches[1], txid1);
-        assert_eq!(index[1], 8);
+        assert_eq!(index[1], 2);
     }
 
     /// Create a CMerkleBlock using a list of txids which will not be found in the given block
     #[test]
     fn merkleblock_construct_from_txids_not_found() {
-        let block = get_block_13b8a();
+        let block = get_block_c88df();
         let txids: Vec<Txid> = ["c0ffee00003bafa802c8aa084379aa98d9fcd632ddc2ed9782b586ec87451f20"]
             .iter()
             .map(|hex| hex.parse::<Txid>().unwrap())
@@ -749,11 +749,11 @@ mod tests {
         }
     }
 
-    /// Returns a real block (0000000000013b8ab2cd513b0261a14096412195a72a0c4827d229dcc7e0f7af)
-    /// with 9 txs.
-    fn get_block_13b8a() -> Block {
+    /// Returns a real block (c88dfda6f22755edca42b678e68fe8a9a10c55ca866800c23e96f1f43d5ded3f)
+    /// with 3 txs.
+    fn get_block_c88df() -> Block {
         use crate::hashes::hex::FromHex;
-        let block_hex = include_str!("../../tests/data/block_13b8a.hex");
+        let block_hex = include_str!("../../tests/data/block_c88df.hex");
         deserialize(&Vec::from_hex(block_hex).unwrap()).unwrap()
     }
 }
