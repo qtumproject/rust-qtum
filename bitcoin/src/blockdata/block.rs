@@ -353,7 +353,8 @@ impl Block {
 
     /// base_size == size of header + size of encoded transaction count.
     fn base_size(&self) -> usize {
-        80 + VarInt(self.txdata.len() as u64).len()
+        // Qtum: header size is 181 byte
+        181 + VarInt(self.txdata.len() as u64).len()
     }
 
     /// Returns the size of the block.
