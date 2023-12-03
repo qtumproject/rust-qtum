@@ -358,8 +358,8 @@ impl Block {
 
     /// base_size == size of header + size of encoded transaction count.
     fn base_size(&self) -> usize {
-        // Qtum: header size is 181 byte
-        181 + VarInt(self.txdata.len() as u64).len()
+        // Qtum: header size is variable
+        181 + self.header.signature.len() + VarInt(self.txdata.len() as u64).len()
     }
 
     /// Returns the size of the block.
@@ -586,14 +586,12 @@ mod tests {
         assert_eq!(real_decode.header.difficulty_float(), 1365392.812200795);
         // [test] TODO: check the transaction data
 
-        /*
-        // QTUM TODO!
         assert_eq!(real_decode.size(), segwit_block.len());
         assert_eq!(real_decode.strippedsize(), 7461);
         assert_eq!(real_decode.weight(), Weight::from_wu(29880));
 
-        //assert!(real_decode.check_witness_commitment());
-        */
+        // QTUM TODO!
+        // assert!(real_decode.check_witness_commitment());
 
         assert_eq!(serialize(&real_decode), segwit_block);
     }
