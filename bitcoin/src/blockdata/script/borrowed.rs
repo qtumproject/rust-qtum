@@ -318,11 +318,11 @@ impl Script {
     }
 
     /// Returns the minimum value an output with this script should have in order to be
-    /// broadcastable on today's Bitcoin network.
+    /// broadcastable on today's Qtum network.
     pub fn dust_value(&self) -> crate::Amount {
-        // This must never be lower than Bitcoin Core's GetDustThreshold() (as of v0.21) as it may
+        // This must never be lower than Qtum Core's GetDustThreshold() (as of v24.1) as it may
         // otherwise allow users to create transactions which likely can never be broadcast/confirmed.
-        let sats = DUST_RELAY_TX_FEE as u64 / 1000 * // The default dust relay fee is 3000 satoshi/kB (i.e. 3 sat/vByte)
+        let sats = DUST_RELAY_TX_FEE as u64 / 1000 * // The default dust relay fee is 400000 satoshi/kB (i.e. 400 sat/vByte)
         if self.is_op_return() {
             0
         } else if self.is_witness_program() {
