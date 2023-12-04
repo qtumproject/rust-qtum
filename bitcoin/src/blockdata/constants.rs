@@ -24,6 +24,10 @@ use crate::network::constants::Network;
 use crate::pow::CompactTarget;
 use crate::internal_macros::impl_bytes_newtype;
 
+// Qtum
+pub use crate::hash_types::BlockHash;
+use ckb_types::h256;
+
 /// How many satoshis are in "one bitcoin".
 pub const COIN_VALUE: u64 = 100_000_000;
 /// How many seconds between blocks we expect on average.
@@ -99,7 +103,7 @@ const GENESIS_BLOCK_TIME_QTUM_REGTEST: u32 = 1504695029;
 const GENESIS_BLOCK_NONCE_QTUM_REGTEST: u32 = 17;
 const GENESIS_BLOCK_BITS_QTUM_REGTEST: u32 = 0x207fffff;
 
-/// Constructs and returns the coinbase (and only) transaction of the Bitcoin genesis block.
+/// Constructs and returns the coinbase (and only) transaction of the Qtum genesis block.
 fn bitcoin_genesis_tx() -> Transaction {
     // Base
     let mut ret = Transaction {
@@ -110,9 +114,10 @@ fn bitcoin_genesis_tx() -> Transaction {
     };
 
     // Inputs
-    let in_script = script::Builder::new().push_int(486604799)
+    let in_script = script::Builder::new().push_opcode(crate::opcodes::OP_0)
+                                          .push_int(488804799)
                                           .push_int_non_minimal(4)
-                                          .push_slice(b"The Times 03/Jan/2009 Chancellor on brink of second bailout for banks")
+                                          .push_slice(b"Sep 02, 2017 Bitcoin breaks $5,000 in latest price frenzy")
                                           .into_script();
     ret.input.push(TxIn {
         previous_output: OutPoint::null(),
@@ -122,7 +127,7 @@ fn bitcoin_genesis_tx() -> Transaction {
     });
 
     // Outputs
-    let script_bytes = hex!("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f");
+    let script_bytes = hex!("040d61d8653448c98731ee5fffd303c15e71ec2057b77f11ab3601979728cdaff2d68afbba14e4fa0bc44f2072b0b23ef63717f8cdfbe58dcd33f32b6afe98741a");
     let out_script = script::Builder::new()
         .push_slice(script_bytes)
         .push_opcode(OP_CHECKSIG)
@@ -141,6 +146,11 @@ pub fn genesis_block(network: Network) -> Block {
     let txdata = vec![bitcoin_genesis_tx()];
     let hash: sha256d::Hash = txdata[0].txid().into();
     let merkle_root = hash.into();
+
+    // Qtum
+    let hash_state_root: BlockHash = Hash::from_slice(h256!("0xe965ffd002cd6ad0e2dc402b8044de833e06b23127ea8c3d80aec91410771495").as_bytes()).unwrap();
+    let hash_utxo_root: BlockHash = Hash::from_slice(keccak_hash::keccak(rlp::encode(&"").as_mut()).as_bytes()).unwrap();
+
     match network {
         Network::Qtum => {
             Block {
@@ -151,12 +161,10 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_MAIN,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_MAIN),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_MAIN,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -170,12 +178,10 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_TEST,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_TEST),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_TEST,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -189,12 +195,10 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_SIGNET,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_SIGNET),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_SIGNET,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -208,12 +212,10 @@ pub fn genesis_block(network: Network) -> Block {
                     time: GENESIS_BLOCK_TIME_QTUM_REGTEST,
                     bits: CompactTarget::from_consensus(GENESIS_BLOCK_BITS_QTUM_REGTEST),
                     nonce: GENESIS_BLOCK_NONCE_QTUM_REGTEST,
-                    // ! TODO: UPDATE THESE VALUES WITH REAL QTUM VALUES
-                    hash_state_root: Hash::all_zeros(),
-                    hash_utxo_root: Hash::all_zeros(),
-                    proofhash: Hash::all_zeros(),
-                    flags: block::BlockFlag::ProofOfStake,
-                    modifier: Hash::all_zeros(),
+                    hash_state_root,
+                    hash_utxo_root,
+                    prevout_stake: OutPoint::null(),
+                    signature: vec![],
                 },
                 txdata,
             }
@@ -230,23 +232,23 @@ impl_bytes_newtype!(ChainHash, 32);
 impl ChainHash {
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
     // Qtum Mainnet Genesis Block Hash: "0x000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c"
-    pub const QTUM: Self = Self([0, 0, 117, 174, 248, 60, 242, 133, 53, 128, 248, 174, 140, 230, 
-        248, 195, 9, 108, 250, 33, 217, 131, 52, 214, 227, 249, 94, 85, 130, 237, 152, 108
+    pub const QTUM: Self = Self([108, 152, 237, 130, 85, 94, 249, 227, 214, 52, 131, 217, 33,
+        250, 108, 9, 195, 248, 230, 140, 174, 248, 128, 53, 133, 242, 60, 248, 174, 117, 0, 0
         ]);
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
-     // Qtum Testnet Genesis Block Hash: "0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"
-    pub const TESTNET: Self = Self([0, 0, 232, 3, 238, 33, 92, 6, 132, 202, 13, 47, 146, 32, 89,
-        77, 63, 130, 134, 23, 151, 42, 173, 102, 254, 178, 186, 81, 245, 225, 66, 34
+    // Qtum Testnet Genesis Block Hash: "0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"
+    pub const TESTNET: Self = Self([34, 66, 225, 245, 81, 186, 178, 254, 102, 173, 42, 151, 23,
+        134, 130, 63, 77, 89, 32, 146, 47, 13, 202, 132, 6, 92, 33, 238, 3, 232, 0, 0
         ]);
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
-     // Qtum Signet Genesis Block Hash: "0xed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d"
-    pub const SIGNET: Self = Self([237, 52, 5, 14, 181, 144, 158, 229, 53, 252, 176, 122, 242, 146, 
-        234, 85, 243, 210, 242, 145, 24, 118, 23, 180, 77, 50, 130, 35, 20, 5, 185, 109
+    // Qtum Signet Genesis Block Hash: "0x0000e0d4bc95abd1c0fcef0abb2795b6e8525f406262d59dc60cd3c490641347"
+    pub const SIGNET: Self = Self([71, 19, 100, 144, 196, 211, 12, 198, 157, 213, 98, 98, 64, 95,
+        82, 232, 182, 149, 39, 187, 10, 239, 252, 192, 209, 171, 149, 188, 212, 224, 0, 0
         ]);
     /// Qtum values can be found at https://github.com/qtumproject/qtum/blob/master/src/chainparams.cpp
     // Qtum Regtest Genesis Block Hash: "0x665ed5b402ac0b44efc37d8926332994363e8a7278b7ee9a58fb972efadae943"
-    pub const REGTEST: Self = Self([102, 94, 213, 180, 2, 172, 11, 68, 239, 195, 125, 137, 38, 51, 
-        41, 148, 54, 62, 138, 114, 120, 183, 238, 154, 88, 251, 151, 46, 250, 218, 233, 67
+    pub const REGTEST: Self = Self([67, 233, 218, 250, 46, 151, 251, 88, 154, 238, 183, 120, 114,
+        138, 62, 54, 148, 41, 51, 38, 137, 125, 195, 239, 68, 11, 172, 2, 180, 213, 94, 102
         ]);
 
     /// Returns the hash of the `network` genesis block for use as a chain hash.
@@ -276,16 +278,16 @@ mod test {
         assert_eq!(gen.input[0].previous_output.txid, Hash::all_zeros());
         assert_eq!(gen.input[0].previous_output.vout, 0xFFFFFFFF);
         assert_eq!(serialize(&gen.input[0].script_sig),
-                   hex!("4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73"));
+                   hex!("420004bf91221d0104395365702030322c203230313720426974636f696e20627265616b732024352c30303020696e206c6174657374207072696365206672656e7a79"));
 
         assert_eq!(gen.input[0].sequence, Sequence::MAX);
         assert_eq!(gen.output.len(), 1);
         assert_eq!(serialize(&gen.output[0].script_pubkey),
-                   hex!("434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac"));
+                   hex!("4341040d61d8653448c98731ee5fffd303c15e71ec2057b77f11ab3601979728cdaff2d68afbba14e4fa0bc44f2072b0b23ef63717f8cdfbe58dcd33f32b6afe98741aac"));
         assert_eq!(gen.output[0].value, 50 * COIN_VALUE);
         assert_eq!(gen.lock_time, absolute::LockTime::ZERO);
 
-        assert_eq!(gen.wtxid().to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
+        assert_eq!(gen.wtxid().to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
     }
 
     #[test]
@@ -294,12 +296,12 @@ mod test {
 
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
-        assert_eq!(gen.header.merkle_root.to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
+        assert_eq!(gen.header.merkle_root.to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
 
-        assert_eq!(gen.header.time, 1231006505);
-        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1d00ffff));
-        assert_eq!(gen.header.nonce, 2083236893);
-        assert_eq!(gen.header.block_hash().to_string(), "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
+        assert_eq!(gen.header.time, 1504695029);
+        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
+        assert_eq!(gen.header.nonce, 8026361);
+        assert_eq!(gen.header.block_hash().to_string(), "000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c");
     }
 
     #[test]
@@ -307,11 +309,11 @@ mod test {
         let gen = genesis_block(Network::Testnet);
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
-        assert_eq!(gen.header.merkle_root.to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
-        assert_eq!(gen.header.time, 1296688602);
-        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1d00ffff));
-        assert_eq!(gen.header.nonce, 414098458);
-        assert_eq!(gen.header.block_hash().to_string(), "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943");
+        assert_eq!(gen.header.merkle_root.to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
+        assert_eq!(gen.header.time, 1504695029);
+        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
+        assert_eq!(gen.header.nonce, 7349697);
+        assert_eq!(gen.header.block_hash().to_string(), "0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222");
     }
 
     #[test]
@@ -319,11 +321,22 @@ mod test {
         let gen = genesis_block(Network::Signet);
         assert_eq!(gen.header.version, block::Version::ONE);
         assert_eq!(gen.header.prev_blockhash, Hash::all_zeros());
-        assert_eq!(gen.header.merkle_root.to_string(), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
-        assert_eq!(gen.header.time, 1598918400);
-        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1e0377ae));
-        assert_eq!(gen.header.nonce, 52613770);
-        assert_eq!(gen.header.block_hash().to_string(), "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6");
+        assert_eq!(gen.header.merkle_root.to_string(), "ed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d");
+        assert_eq!(gen.header.time, 1623662135);
+        assert_eq!(gen.header.bits, CompactTarget::from_consensus(0x1f00ffff));
+        assert_eq!(gen.header.nonce, 7377285);
+        assert_eq!(gen.header.block_hash().to_string(), "0000e0d4bc95abd1c0fcef0abb2795b6e8525f406262d59dc60cd3c490641347");
+    }
+
+    // Qtum
+    #[test]
+    fn qtum_genesis_qtum_specific_fields() {
+        let gen = genesis_block(Network::Qtum);
+
+        assert_eq!(gen.header.hash_state_root.to_string(), "9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9");
+        assert_eq!(gen.header.hash_utxo_root.to_string(), "21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856");
+        assert_eq!(gen.header.prevout_stake, OutPoint::null());
+        assert_eq!(gen.header.signature, Vec::<u8>::new());
     }
 
     // The *_chain_hash tests are sanity/regression tests, they verify that the const byte array
@@ -374,7 +387,7 @@ mod test {
     #[test]
     fn mainnet_chain_hash_test_vector() {
         let got = ChainHash::using_genesis_block(Network::Qtum).to_string();
-        let want = "6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000";
+        let want = "6c98ed82555ef9e3d63483d921fa6c09c3f8e68caef8803585f23cf8ae750000";
         assert_eq!(got, want);
     }
 }
