@@ -1,9 +1,9 @@
 [package]
-name = "bitcoin_hashes"
-version = "0.12.0"
-authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
+name = "qtum_hashes"
+version = "0.12.0-qtum"
+authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>", "The Qtum developers"]
 license = "CC0-1.0"
-repository = "https://github.com/rust-bitcoin/bitcoin_hashes/"
+repository = "https://github.com/qtumproject/rust-qtum/hashes/"
 documentation = "https://docs.rs/bitcoin_hashes/"
 description = "Hash functions used by the rust-bitcoin eccosystem"
 categories = ["algorithms"]
@@ -11,6 +11,7 @@ keywords = [ "crypto", "bitcoin", "hash", "digest" ]
 readme = "README.md"
 edition = "2018"
 exclude = ["tests", "contrib"]
+autotests = false
 
 [features]
 default = ["std"]
@@ -24,7 +25,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-internals = { path = "../internals", package = "bitcoin-private", version = "0.1.0" }
+internals = { path = "../internals", package = "qtum-private", version = "0.1.0-qtum" }
 
 core2 = { version = "0.3.0", default_features = false, optional = true }
 # Only enable this if you explicitly do not want to use "std", otherwise enable "serde-std".

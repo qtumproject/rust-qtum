@@ -1,16 +1,17 @@
 [package]
-name = "bitcoin"
+name = "qtum"
 version = "0.30.0-qtum"
-authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
+authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>", "The Qtum developers"]
 license = "CC0-1.0"
-repository = "https://github.com/rust-bitcoin/rust-bitcoin/"
+repository = "https://github.com/qtumproject/rust-qtum/qtum"
 documentation = "https://docs.rs/bitcoin/"
-description = "General purpose library for using and interoperating with Bitcoin."
+description = "General purpose library for using and interoperating with Qtum."
 categories = ["cryptography::cryptocurrencies"]
-keywords = [ "crypto", "bitcoin" ]
+keywords = [ "crypto", "bitcoin", "qtum" ]
 readme = "../README.md"
 edition = "2018"
 exclude = ["tests", "contrib"]
+autotests = false
 
 [features]
 default = [ "std", "secp-recovery" ]
@@ -34,7 +35,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-bitcoin-internals = { path = "../internals", package = "bitcoin-private", version = "0.1.0" }
+bitcoin-internals = { path = "../internals", package = "qtum-private", version = "0.1.0-qtum" }
 bech32 = { version = "0.9.0", default-features = false }
 bitcoin_hashes = { version = "0.12.0", default-features = false }
 secp256k1 = { version = "0.27.0", default-features = false, features = ["bitcoin_hashes"] }
