@@ -411,9 +411,9 @@ mod tests {
     #[test]
     fn magic_from_str() {
         let known_network_magic_strs = [
-            ("f9beb4d9", Network::Qtum),
-            ("0b110907", Network::Testnet),
-            ("fabfb5da", Network::Regtest),
+            ("f1cfa6d3", Network::Qtum),
+            ("0d221506", Network::Testnet),
+            ("fdddc6e1", Network::Regtest),
             ("0a03cf40", Network::Signet),
         ];
 

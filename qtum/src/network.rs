@@ -317,15 +317,15 @@ mod tests {
 
     #[test]
     fn serialize_test() {
-        assert_eq!(serialize(&Network::Qtum.magic()), &[0xf9, 0xbe, 0xb4, 0xd9]);
-        assert_eq!(serialize(&Network::Testnet.magic()), &[0x0b, 0x11, 0x09, 0x07]);
+        assert_eq!(serialize(&Network::Qtum.magic()), &[0xf1, 0xcf, 0xa6, 0xd3]);
+        assert_eq!(serialize(&Network::Testnet.magic()), &[0x0d, 0x22, 0x15, 0x06]);
         assert_eq!(serialize(&Network::Signet.magic()), &[0x0a, 0x03, 0xcf, 0x40]);
-        assert_eq!(serialize(&Network::Regtest.magic()), &[0xfa, 0xbf, 0xb5, 0xda]);
+        assert_eq!(serialize(&Network::Regtest.magic()), &[0xfd, 0xdd, 0xc6, 0xe1]);
 
-        assert_eq!(deserialize(&[0xf9, 0xbe, 0xb4, 0xd9]).ok(), Some(Network::Qtum.magic()));
-        assert_eq!(deserialize(&[0x0b, 0x11, 0x09, 0x07]).ok(), Some(Network::Testnet.magic()));
+        assert_eq!(deserialize(&[0xf1, 0xcf, 0xa6, 0xd3]).ok(), Some(Network::Qtum.magic()));
+        assert_eq!(deserialize(&[0x0d, 0x22, 0x15, 0x06]).ok(), Some(Network::Testnet.magic()));
         assert_eq!(deserialize(&[0x0a, 0x03, 0xcf, 0x40]).ok(), Some(Network::Signet.magic()));
-        assert_eq!(deserialize(&[0xfa, 0xbf, 0xb5, 0xda]).ok(), Some(Network::Regtest.magic()));
+        assert_eq!(deserialize(&[0xfd, 0xdd, 0xc6, 0xe1]).ok(), Some(Network::Regtest.magic()));
     }
 
     #[test]
