@@ -1,4 +1,3 @@
-// Written in 2014 by Andrew Poelstra <apoelstra@wpsoftware.net>
 // SPDX-License-Identifier: CC0-1.0
 
 //! Bitcoin taproot keys.
@@ -8,13 +7,11 @@
 
 use core::fmt;
 
-use bitcoin_internals::write_err;
-
-pub use secp256k1::{self, constants, Secp256k1, KeyPair, XOnlyPublicKey, Verification, Parity};
+use internals::write_err;
 
 use crate::prelude::*;
-
-use crate::sighash::TapSighashType;
+use crate::sighash::{InvalidSighashTypeError, TapSighashType};
+use crate::taproot::serialized_signature::{self, SerializedSignature};
 
 /// A BIP340-341 serialized taproot signature with the corresponding hash type.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,29 +26,26 @@ pub struct Signature {
 
 impl Signature {
     /// Deserialize from slice
-    pub fn from_slice(sl: &[u8]) -> Result<Self, Error> {
+    pub fn from_slice(sl: &[u8]) -> Result<Self, SigFromSliceError> {
         match sl.len() {
             64 => {
                 // default type
-                let sig = secp256k1::schnorr::Signature::from_slice(sl)
-                    .map_err(Error::Secp256k1)?;
+                let sig = secp256k1::schnorr::Signature::from_slice(sl)?;
                 Ok(Signature { sig, hash_ty: TapSighashType::Default })
-            },
+            }
             65 => {
                 let (hash_ty, sig) = sl.split_last().expect("Slice len checked == 65");
-                let hash_ty = TapSighashType::from_consensus_u8(*hash_ty)
-                    .map_err(|_| Error::InvalidSighashType(*hash_ty))?;
-                let sig = secp256k1::schnorr::Signature::from_slice(sig)
-                    .map_err(Error::Secp256k1)?;
+                let hash_ty = TapSighashType::from_consensus_u8(*hash_ty)?;
+                let sig = secp256k1::schnorr::Signature::from_slice(sig)?;
                 Ok(Signature { sig, hash_ty })
             }
-            len => {
-                Err(Error::InvalidSignatureSize(len))
-            }
+            len => Err(SigFromSliceError::InvalidSignatureSize(len)),
         }
     }
 
     /// Serialize Signature
+    ///
+    /// Note: this allocates on the heap, prefer [`serialize`](Self::serialize) if vec is not needed.
     pub fn to_vec(self) -> Vec<u8> {
         // TODO: add support to serialize to a writer to SerializedSig
         let mut ser_sig = self.sig.as_ref().to_vec();
@@ -63,50 +57,68 @@ impl Signature {
         ser_sig
     }
 
+    /// Serializes the signature (without heap allocation)
+    ///
+    /// This returns a type with an API very similar to that of `Box<[u8]>`.
+    /// You can get a slice from it using deref coercions or turn it into an iterator.
+    pub fn serialize(self) -> SerializedSignature {
+        let mut buf = [0; serialized_signature::MAX_LEN];
+        let ser_sig = self.sig.serialize();
+        buf[..64].copy_from_slice(&ser_sig);
+        let len = if self.hash_ty == TapSighashType::Default {
+            // default sighash type, don't add extra sighash byte
+            64
+        } else {
+            buf[64] = self.hash_ty as u8;
+            65
+        };
+        SerializedSignature::from_raw_parts(buf, len)
+    }
 }
 
-/// A taproot sig related error.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+/// An error constructing a [`taproot::Signature`] from a byte slice.
+///
+/// [`taproot::Signature`]: crate::crypto::taproot::Signature
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Error {
-    /// Base58 encoding error
-    InvalidSighashType(u8),
-    /// Signature has valid size but does not parse correctly
+pub enum SigFromSliceError {
+    /// Invalid signature hash type.
+    SighashType(InvalidSighashTypeError),
+    /// A secp256k1 error.
     Secp256k1(secp256k1::Error),
     /// Invalid taproot signature size
     InvalidSignatureSize(usize),
 }
 
-
-impl fmt::Display for Error {
+impl fmt::Display for SigFromSliceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use SigFromSliceError::*;
+
         match *self {
-            Error::InvalidSighashType(hash_ty) =>
-                write!(f, "invalid signature hash type {}", hash_ty),
-            Error::Secp256k1(ref e) =>
-                write_err!(f, "taproot signature has correct len but is malformed"; e),
-            Error::InvalidSignatureSize(sz) =>
-                write!(f, "invalid taproot signature size: {}", sz),
+            SighashType(ref e) => write_err!(f, "sighash"; e),
+            Secp256k1(ref e) => write_err!(f, "secp256k1"; e),
+            InvalidSignatureSize(sz) => write!(f, "invalid taproot signature size: {}", sz),
         }
     }
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
-impl std::error::Error for Error {
+impl std::error::Error for SigFromSliceError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use self::Error::*;
+        use SigFromSliceError::*;
 
-        match self {
-            Secp256k1(e) => Some(e),
-            InvalidSighashType(_) | InvalidSignatureSize(_) => None,
+        match *self {
+            Secp256k1(ref e) => Some(e),
+            SighashType(ref e) => Some(e),
+            InvalidSignatureSize(_) => None,
         }
     }
 }
 
-impl From<secp256k1::Error> for Error {
+impl From<secp256k1::Error> for SigFromSliceError {
+    fn from(e: secp256k1::Error) -> Self { Self::Secp256k1(e) }
+}
 
-    fn from(e: secp256k1::Error) -> Error {
-        Error::Secp256k1(e)
-    }
+impl From<InvalidSighashTypeError> for SigFromSliceError {
+    fn from(err: InvalidSighashTypeError) -> Self { Self::SighashType(err) }
 }

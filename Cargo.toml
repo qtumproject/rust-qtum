@@ -1,3 +1,11 @@
 [workspace]
-members = ["qtum", "hashes", "internals"]
+# Qtum ToDo: adapt and enable fuzz
+# members = ["qtum", "hashes", "internals", "fuzz", "io", "units"]
+members = ["qtum", "hashes", "internals", "io", "units"]
+resolver = "2"
 
+[patch.crates-io.bitcoin-io]
+path = "io"
+
+[patch.crates-io.bitcoin-units]
+path = "units"

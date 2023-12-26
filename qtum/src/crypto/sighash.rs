@@ -14,14 +14,15 @@
 use core::borrow::{Borrow, BorrowMut};
 use core::{fmt, str};
 
-use crate::{io, Script, ScriptBuf, Transaction, TxIn, TxOut, Sequence};
-use crate::blockdata::transaction::EncodeSigningDataResult;
+use hashes::{hash_newtype, sha256, sha256d, sha256t_hash_newtype, Hash};
+use internals::write_err;
+use io::Write;
+
 use crate::blockdata::witness::Witness;
 use crate::consensus::{encode, Encodable};
-use crate::error::impl_std_error;
-use crate::hashes::{hash_newtype, sha256, sha256t_hash_newtype, sha256d, Hash};
 use crate::prelude::*;
 use crate::taproot::{LeafVersion, TapLeafHash, TAPROOT_ANNEX_PREFIX};
+use crate::{Amount, Script, ScriptBuf, Sequence, Transaction, TxIn, TxOut};
 
 /// Used for signature hash for invalid use of SIGHASH_SINGLE.
 #[rustfmt::skip]
@@ -32,19 +33,12 @@ pub(crate) const UINT256_ONE: [u8; 32] = [
     0, 0, 0, 0, 0, 0, 0, 0
 ];
 
-/// The SHA-256 midstate value for the [`TapSighash`].
-pub(crate) const MIDSTATE_TAPSIGHASH: [u8; 32] = [
-    245, 4, 164, 37, 215, 248, 120, 59, 19, 99, 134, 138, 227, 229, 86, 88, 110, 238, 148, 93, 188,
-    120, 136, 221, 2, 166, 226, 195, 24, 115, 254, 159,
-];
-// f504a425d7f8783b1363868ae3e556586eee945dbc7888dd02a6e2c31873fe9f
-
 macro_rules! impl_thirty_two_byte_hash {
     ($ty:ident) => {
         impl secp256k1::ThirtyTwoByteHash for $ty {
             fn into_32(self) -> [u8; 32] { self.to_byte_array() }
         }
-    }
+    };
 }
 
 hash_newtype! {
@@ -60,11 +54,15 @@ hash_newtype! {
 impl_thirty_two_byte_hash!(LegacySighash);
 impl_thirty_two_byte_hash!(SegwitV0Sighash);
 
-sha256t_hash_newtype!(TapSighash, TapSighashTag, MIDSTATE_TAPSIGHASH, 64,
-    doc="Taproot-tagged hash with tag \"TapSighash\".
+sha256t_hash_newtype! {
+    pub struct TapSighashTag = hash_str("TapSighash");
 
-This hash type is used for computing taproot signature hash.", forward
-);
+    /// Taproot-tagged hash with tag \"TapSighash\".
+    ///
+    /// This hash type is used for computing taproot signature hash."
+    #[hash_newtype(forward)]
+    pub struct TapSighash(_);
+}
 
 impl_thirty_two_byte_hash!(TapSighash);
 
@@ -201,7 +199,7 @@ impl str::FromStr for TapSighashType {
 }
 
 /// Possible errors in computing the signature message.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
     /// Could happen only by using `*_encode_signing_*` methods with custom writers, engines writers
@@ -227,89 +225,175 @@ pub enum Error {
 
     /// There are mismatches in the number of prevouts provided compared to the number of inputs in
     /// the transaction.
-    PrevoutsSize,
+    PrevoutsSize(PrevoutsSizeError),
 
     /// Requested a prevout index which is greater than the number of prevouts provided or a
     /// [`Prevouts::One`] with different index.
-    PrevoutIndex,
+    PrevoutsIndex(PrevoutsIndexError),
 
     /// A single prevout has been provided but all prevouts are needed unless using
     /// `SIGHASH_ANYONECANPAY`.
-    PrevoutKind,
+    PrevoutsKind(PrevoutsKindError),
 
     /// Annex must be at least one byte long and the first bytes must be `0x50`.
     WrongAnnex,
 
     /// Invalid Sighash type.
     InvalidSighashType(u32),
+
+    /// Script is not a witness program for a p2wpkh output.
+    NotP2wpkhScript,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Error::*;
 
-        match self {
+        match *self {
             Io(error_kind) => write!(f, "writer errored: {:?}", error_kind),
-            IndexOutOfInputsBounds { index, inputs_size } => write!(f, "Requested index ({}) is greater or equal than the number of transaction inputs ({})", index, inputs_size),
+            IndexOutOfInputsBounds { index, inputs_size } => write!(f, "requested index ({}) is greater or equal than the number of transaction inputs ({})", index, inputs_size),
             SingleWithoutCorrespondingOutput { index, outputs_size } => write!(f, "SIGHASH_SINGLE for input ({}) haven't a corresponding output (#outputs:{})", index, outputs_size),
-            PrevoutsSize => write!(f, "Number of supplied prevouts differs from the number of inputs in transaction"),
-            PrevoutIndex => write!(f, "The index requested is greater than available prevouts or different from the provided [Provided::Anyone] index"),
-            PrevoutKind => write!(f, "A single prevout has been provided but all prevouts are needed without `ANYONECANPAY`"),
-            WrongAnnex => write!(f, "Annex must be at least one byte long and the first bytes must be `0x50`"),
+            PrevoutsSize(ref e) => write_err!(f, "prevouts size"; e),
+            PrevoutsIndex(ref e) => write_err!(f, "prevouts index"; e),
+            PrevoutsKind(ref e) => write_err!(f, "prevouts kind"; e),
+            WrongAnnex => write!(f, "annex must be at least one byte long and the first bytes must be `0x50`"),
             InvalidSighashType(hash_ty) => write!(f, "Invalid taproot signature hash type : {} ", hash_ty),
+            NotP2wpkhScript => write!(f, "script is not a script pubkey for a p2wpkh output"),
         }
     }
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         use Error::*;
 
-        match self {
+        match *self {
+            PrevoutsSize(ref e) => Some(e),
+            PrevoutsIndex(ref e) => Some(e),
+            PrevoutsKind(ref e) => Some(e),
             Io(_)
             | IndexOutOfInputsBounds { .. }
             | SingleWithoutCorrespondingOutput { .. }
-            | PrevoutsSize
-            | PrevoutIndex
-            | PrevoutKind
             | WrongAnnex
-            | InvalidSighashType(_) => None,
+            | InvalidSighashType(_)
+            | NotP2wpkhScript => None,
         }
     }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self { Error::Io(e.kind()) }
+}
+
+impl From<PrevoutsSizeError> for Error {
+    fn from(e: PrevoutsSizeError) -> Self { Self::PrevoutsSize(e) }
+}
+
+impl From<PrevoutsKindError> for Error {
+    fn from(e: PrevoutsKindError) -> Self { Self::PrevoutsKind(e) }
+}
+
+impl From<PrevoutsIndexError> for Error {
+    fn from(e: PrevoutsIndexError) -> Self { Self::PrevoutsIndex(e) }
 }
 
 impl<'u, T> Prevouts<'u, T>
 where
     T: Borrow<TxOut>,
 {
-    fn check_all(&self, tx: &Transaction) -> Result<(), Error> {
+    fn check_all(&self, tx: &Transaction) -> Result<(), PrevoutsSizeError> {
         if let Prevouts::All(prevouts) = self {
             if prevouts.len() != tx.input.len() {
-                return Err(Error::PrevoutsSize);
+                return Err(PrevoutsSizeError);
             }
         }
         Ok(())
     }
 
-    fn get_all(&self) -> Result<&[T], Error> {
+    fn get_all(&self) -> Result<&[T], PrevoutsKindError> {
         match self {
             Prevouts::All(prevouts) => Ok(*prevouts),
-            _ => Err(Error::PrevoutKind),
+            _ => Err(PrevoutsKindError),
         }
     }
 
-    fn get(&self, input_index: usize) -> Result<&TxOut, Error> {
+    fn get(&self, input_index: usize) -> Result<&TxOut, PrevoutsIndexError> {
         match self {
             Prevouts::One(index, prevout) =>
                 if input_index == *index {
                     Ok(prevout.borrow())
                 } else {
-                    Err(Error::PrevoutIndex)
+                    Err(PrevoutsIndexError::InvalidOneIndex)
                 },
-            Prevouts::All(prevouts) =>
-                prevouts.get(input_index).map(|x| x.borrow()).ok_or(Error::PrevoutIndex),
+            Prevouts::All(prevouts) => prevouts
+                .get(input_index)
+                .map(|x| x.borrow())
+                .ok_or(PrevoutsIndexError::InvalidAllIndex),
+        }
+    }
+}
+
+/// The number of supplied prevouts differs from the number of inputs in the transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PrevoutsSizeError;
+
+impl fmt::Display for PrevoutsSizeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "number of supplied prevouts differs from the number of inputs in transaction")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for PrevoutsSizeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
+/// A single prevout was been provided but all prevouts are needed without `ANYONECANPAY`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PrevoutsKindError;
+
+impl fmt::Display for PrevoutsKindError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "single prevout provided but all prevouts are needed without `ANYONECANPAY`")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for PrevoutsKindError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
+/// [`Prevouts`] index related errors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PrevoutsIndexError {
+    /// Invalid index when accessing a [`Prevouts::One`] kind.
+    InvalidOneIndex,
+    /// Invalid index when accessing a [`Prevouts::All`] kind.
+    InvalidAllIndex,
+}
+
+impl fmt::Display for PrevoutsIndexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use PrevoutsIndexError::*;
+
+        match *self {
+            InvalidOneIndex => write!(f, "invalid index when accessing a Prevouts::One kind"),
+            InvalidAllIndex => write!(f, "invalid index when accessing a Prevouts::All kind"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for PrevoutsIndexError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        use PrevoutsIndexError::*;
+
+        match *self {
+            InvalidOneIndex | InvalidAllIndex => None,
         }
     }
 }
@@ -328,8 +412,8 @@ impl<'s> ScriptPath<'s> {
         self.leaf_version
             .to_consensus()
             .consensus_encode(&mut enc)
-            .expect("Writing to hash enging should never fail");
-        self.script.consensus_encode(&mut enc).expect("Writing to hash enging should never fail");
+            .expect("writing to hash enging should never fail");
+        self.script.consensus_encode(&mut enc).expect("writing to hash enging should never fail");
 
         TapLeafHash::from_engine(enc)
     }
@@ -449,7 +533,7 @@ impl EcdsaSighashType {
     /// # Errors
     ///
     /// If `n` is a non-standard sighash value.
-    pub fn from_standard(n: u32) -> Result<EcdsaSighashType, NonStandardSighashType> {
+    pub fn from_standard(n: u32) -> Result<EcdsaSighashType, NonStandardSighashTypeError> {
         use EcdsaSighashType::*;
 
         match n {
@@ -460,7 +544,7 @@ impl EcdsaSighashType {
             0x81 => Ok(AllPlusAnyoneCanPay),
             0x82 => Ok(NonePlusAnyoneCanPay),
             0x83 => Ok(SinglePlusAnyoneCanPay),
-            non_standard => Err(NonStandardSighashType(non_standard)),
+            non_standard => Err(NonStandardSighashTypeError(non_standard)),
         }
     }
 
@@ -502,7 +586,7 @@ impl TapSighashType {
     }
 
     /// Constructs a [`TapSighashType`] from a raw `u8`.
-    pub fn from_consensus_u8(hash_ty: u8) -> Result<Self, Error> {
+    pub fn from_consensus_u8(hash_ty: u8) -> Result<Self, InvalidSighashTypeError> {
         use TapSighashType::*;
 
         Ok(match hash_ty {
@@ -513,28 +597,49 @@ impl TapSighashType {
             0x81 => AllPlusAnyoneCanPay,
             0x82 => NonePlusAnyoneCanPay,
             0x83 => SinglePlusAnyoneCanPay,
-            x => return Err(Error::InvalidSighashType(x as u32)),
+            x => return Err(InvalidSighashTypeError(x.into())),
         })
     }
 }
 
-/// This type is consensus valid but an input including it would prevent the transaction from
-/// being relayed on today's Bitcoin network.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NonStandardSighashType(pub u32);
+/// Integer is not a consensus valid sighash type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct InvalidSighashTypeError(pub u32);
 
-impl fmt::Display for NonStandardSighashType {
+impl fmt::Display for InvalidSighashTypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Non standard sighash type {}", self.0)
+        write!(f, "invalid sighash type {}", self.0)
     }
 }
 
-impl_std_error!(NonStandardSighashType);
+#[cfg(feature = "std")]
+impl std::error::Error for InvalidSighashTypeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
+
+/// This type is consensus valid but an input including it would prevent the transaction from
+/// being relayed on today's Bitcoin network.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct NonStandardSighashTypeError(pub u32);
+
+impl fmt::Display for NonStandardSighashTypeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "non-standard sighash type {}", self.0)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for NonStandardSighashTypeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
 
 /// Error returned for failure during parsing one of the sighash types.
 ///
 /// This is currently returned for unrecognized sighash strings.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SighashTypeParseError {
     /// The unrecognized string we attempted to parse.
     pub unrecognized: String,
@@ -542,11 +647,14 @@ pub struct SighashTypeParseError {
 
 impl fmt::Display for SighashTypeParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Unrecognized SIGHASH string '{}'", self.unrecognized)
+        write!(f, "unrecognized SIGHASH string '{}'", self.unrecognized)
     }
 }
 
-impl_std_error!(SighashTypeParseError);
+#[cfg(feature = "std")]
+impl std::error::Error for SighashTypeParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+}
 
 impl<R: Borrow<Transaction>> SighashCache<R> {
     /// Constructs a new `SighashCache` from an unsigned transaction.
@@ -559,20 +667,16 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
     }
 
     /// Returns the reference to the cached transaction.
-    pub fn transaction(&self) -> &Transaction {
-        self.tx.borrow()
-    }
+    pub fn transaction(&self) -> &Transaction { self.tx.borrow() }
 
     /// Destroys the cache and recovers the stored transaction.
-    pub fn into_transaction(self) -> R {
-        self.tx
-    }
+    pub fn into_transaction(self) -> R { self.tx }
 
-    /// Encodes the BIP341 signing data for any flag type into a given object implementing a
+    /// Encodes the BIP341 signing data for any flag type into a given object implementing the
     /// [`io::Write`] trait.
-    pub fn taproot_encode_signing_data_to<Write: io::Write, T: Borrow<TxOut>>(
+    pub fn taproot_encode_signing_data_to<W: Write + ?Sized, T: Borrow<TxOut>>(
         &mut self,
-        mut writer: Write,
+        writer: &mut W,
         input_index: usize,
         prevouts: &Prevouts<T>,
         annex: Option<Annex>,
@@ -584,18 +688,18 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         let (sighash, anyone_can_pay) = sighash_type.split_anyonecanpay_flag();
 
         // epoch
-        0u8.consensus_encode(&mut writer)?;
+        0u8.consensus_encode(writer)?;
 
         // * Control:
         // hash_type (1).
-        (sighash_type as u8).consensus_encode(&mut writer)?;
+        (sighash_type as u8).consensus_encode(writer)?;
 
         // * Transaction Data:
         // nVersion (4): the nVersion of the transaction.
-        self.tx.borrow().version.consensus_encode(&mut writer)?;
+        self.tx.borrow().version.consensus_encode(writer)?;
 
         // nLockTime (4): the nLockTime of the transaction.
-        self.tx.borrow().lock_time.consensus_encode(&mut writer)?;
+        self.tx.borrow().lock_time.consensus_encode(writer)?;
 
         // If the hash_type & 0x80 does not equal SIGHASH_ANYONECANPAY:
         //     sha_prevouts (32): the SHA256 of the serialization of all input outpoints.
@@ -603,16 +707,16 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         //     sha_scriptpubkeys (32): the SHA256 of the serialization of all spent output scriptPubKeys.
         //     sha_sequences (32): the SHA256 of the serialization of all input nSequence.
         if !anyone_can_pay {
-            self.common_cache().prevouts.consensus_encode(&mut writer)?;
-            self.taproot_cache(prevouts.get_all()?).amounts.consensus_encode(&mut writer)?;
-            self.taproot_cache(prevouts.get_all()?).script_pubkeys.consensus_encode(&mut writer)?;
-            self.common_cache().sequences.consensus_encode(&mut writer)?;
+            self.common_cache().prevouts.consensus_encode(writer)?;
+            self.taproot_cache(prevouts.get_all()?).amounts.consensus_encode(writer)?;
+            self.taproot_cache(prevouts.get_all()?).script_pubkeys.consensus_encode(writer)?;
+            self.common_cache().sequences.consensus_encode(writer)?;
         }
 
         // If hash_type & 3 does not equal SIGHASH_NONE or SIGHASH_SINGLE:
         //     sha_outputs (32): the SHA256 of the serialization of all outputs in CTxOut format.
         if sighash != TapSighashType::None && sighash != TapSighashType::Single {
-            self.common_cache().outputs.consensus_encode(&mut writer)?;
+            self.common_cache().outputs.consensus_encode(writer)?;
         }
 
         // * Data about this input:
@@ -625,7 +729,7 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         if leaf_hash_code_separator.is_some() {
             spend_type |= 2u8;
         }
-        spend_type.consensus_encode(&mut writer)?;
+        spend_type.consensus_encode(writer)?;
 
         // If hash_type & 0x80 equals SIGHASH_ANYONECANPAY:
         //      outpoint (36): the COutPoint of this input (32-byte hash + 4-byte little-endian).
@@ -633,17 +737,18 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         //      scriptPubKey (35): scriptPubKey of the previous output spent by this input, serialized as script inside CTxOut. Its size is always 35 bytes.
         //      nSequence (4): nSequence of this input.
         if anyone_can_pay {
-            let txin = &self.tx.borrow().input.get(input_index).ok_or(Error::IndexOutOfInputsBounds {
-                index: input_index,
-                inputs_size: self.tx.borrow().input.len(),
-            })?;
+            let txin =
+                &self.tx.borrow().input.get(input_index).ok_or(Error::IndexOutOfInputsBounds {
+                    index: input_index,
+                    inputs_size: self.tx.borrow().input.len(),
+                })?;
             let previous_output = prevouts.get(input_index)?;
-            txin.previous_output.consensus_encode(&mut writer)?;
-            previous_output.value.consensus_encode(&mut writer)?;
-            previous_output.script_pubkey.consensus_encode(&mut writer)?;
-            txin.sequence.consensus_encode(&mut writer)?;
+            txin.previous_output.consensus_encode(writer)?;
+            previous_output.value.consensus_encode(writer)?;
+            previous_output.script_pubkey.consensus_encode(writer)?;
+            txin.sequence.consensus_encode(writer)?;
         } else {
-            (input_index as u32).consensus_encode(&mut writer)?;
+            (input_index as u32).consensus_encode(writer)?;
         }
 
         // If an annex is present (the lowest bit of spend_type is set):
@@ -653,7 +758,7 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
             let mut enc = sha256::Hash::engine();
             annex.consensus_encode(&mut enc)?;
             let hash = sha256::Hash::from_engine(enc);
-            hash.consensus_encode(&mut writer)?;
+            hash.consensus_encode(writer)?;
         }
 
         // * Data about this output:
@@ -671,7 +776,7 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
                 })?
                 .consensus_encode(&mut enc)?;
             let hash = sha256::Hash::from_engine(enc);
-            hash.consensus_encode(&mut writer)?;
+            hash.consensus_encode(writer)?;
         }
 
         //     if (scriptpath):
@@ -679,9 +784,9 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         //         ss += bytes([0])
         //         ss += struct.pack("<i", codeseparator_pos)
         if let Some((hash, code_separator_pos)) = leaf_hash_code_separator {
-            hash.as_byte_array().consensus_encode(&mut writer)?;
-            KEY_VERSION_0.consensus_encode(&mut writer)?;
-            code_separator_pos.consensus_encode(&mut writer)?;
+            hash.as_byte_array().consensus_encode(writer)?;
+            KEY_VERSION_0.consensus_encode(writer)?;
+            code_separator_pos.consensus_encode(writer)?;
         }
 
         Ok(())
@@ -750,52 +855,58 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         Ok(TapSighash::from_engine(enc))
     }
 
-    /// Encodes the BIP143 signing data for any flag type into a given object implementing a
+    /// Encodes the BIP143 signing data for any flag type into a given object implementing the
     /// [`std::io::Write`] trait.
-    pub fn segwit_encode_signing_data_to<Write: io::Write>(
+    ///
+    /// `script_code` is dependent on the type of the spend transaction. For p2wpkh use
+    /// [`Script::p2wpkh_script_code`], for p2wsh just pass in the witness script. (Also see
+    /// [`Self::p2wpkh_signature_hash`] and [`SighashCache::p2wsh_signature_hash`].)
+    pub fn segwit_v0_encode_signing_data_to<W: Write + ?Sized>(
         &mut self,
-        mut writer: Write,
+        writer: &mut W,
         input_index: usize,
         script_code: &Script,
-        value: u64,
+        value: Amount,
         sighash_type: EcdsaSighashType,
     ) -> Result<(), Error> {
         let zero_hash = sha256d::Hash::all_zeros();
 
         let (sighash, anyone_can_pay) = sighash_type.split_anyonecanpay_flag();
 
-        self.tx.borrow().version.consensus_encode(&mut writer)?;
+        self.tx.borrow().version.consensus_encode(writer)?;
 
         if !anyone_can_pay {
-            self.segwit_cache().prevouts.consensus_encode(&mut writer)?;
+            self.segwit_cache().prevouts.consensus_encode(writer)?;
         } else {
-            zero_hash.consensus_encode(&mut writer)?;
+            zero_hash.consensus_encode(writer)?;
         }
 
         if !anyone_can_pay
             && sighash != EcdsaSighashType::Single
             && sighash != EcdsaSighashType::None
         {
-            self.segwit_cache().sequences.consensus_encode(&mut writer)?;
+            self.segwit_cache().sequences.consensus_encode(writer)?;
         } else {
-            zero_hash.consensus_encode(&mut writer)?;
+            zero_hash.consensus_encode(writer)?;
         }
 
         {
-            let txin = &self.tx.borrow().input.get(input_index).ok_or(Error::IndexOutOfInputsBounds {
-                index: input_index,
-                inputs_size: self.tx.borrow().input.len(),
-            })?;
+            let txin =
+                &self.tx.borrow().input.get(input_index).ok_or(Error::IndexOutOfInputsBounds {
+                    index: input_index,
+                    inputs_size: self.tx.borrow().input.len(),
+                })?;
 
-            txin.previous_output.consensus_encode(&mut writer)?;
-            script_code.consensus_encode(&mut writer)?;
-            value.consensus_encode(&mut writer)?;
-            txin.sequence.consensus_encode(&mut writer)?;
+            txin.previous_output.consensus_encode(writer)?;
+            script_code.consensus_encode(writer)?;
+            value.consensus_encode(writer)?;
+            txin.sequence.consensus_encode(writer)?;
         }
 
         if sighash != EcdsaSighashType::Single && sighash != EcdsaSighashType::None {
-            self.segwit_cache().outputs.consensus_encode(&mut writer)?;
-        } else if sighash == EcdsaSighashType::Single && input_index < self.tx.borrow().output.len() {
+            self.segwit_cache().outputs.consensus_encode(writer)?;
+        } else if sighash == EcdsaSighashType::Single && input_index < self.tx.borrow().output.len()
+        {
             let mut single_enc = LegacySighash::engine();
             self.tx.borrow().output[input_index].consensus_encode(&mut single_enc)?;
             let hash = LegacySighash::from_engine(single_enc);
@@ -804,24 +915,48 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
             writer.write_all(&zero_hash[..])?;
         }
 
-        self.tx.borrow().lock_time.consensus_encode(&mut writer)?;
-        sighash_type.to_u32().consensus_encode(&mut writer)?;
+        self.tx.borrow().lock_time.consensus_encode(writer)?;
+        sighash_type.to_u32().consensus_encode(writer)?;
         Ok(())
     }
 
-    /// Computes the BIP143 sighash for any flag type.
-    pub fn segwit_signature_hash(
+    /// Computes the BIP143 sighash to spend a p2wpkh transaction for any flag type.
+    ///
+    /// `script_pubkey` is the `scriptPubkey` (native segwit) of the spend transaction
+    /// ([`TxOut::script_pubkey`]) or the `redeemScript` (wrapped segwit).
+    pub fn p2wpkh_signature_hash(
         &mut self,
         input_index: usize,
-        script_code: &Script,
-        value: u64,
+        script_pubkey: &Script,
+        value: Amount,
+        sighash_type: EcdsaSighashType,
+    ) -> Result<SegwitV0Sighash, Error> {
+        let script_code = script_pubkey.p2wpkh_script_code().ok_or(Error::NotP2wpkhScript)?;
+
+        let mut enc = SegwitV0Sighash::engine();
+        self.segwit_v0_encode_signing_data_to(
+            &mut enc,
+            input_index,
+            &script_code,
+            value,
+            sighash_type,
+        )?;
+        Ok(SegwitV0Sighash::from_engine(enc))
+    }
+
+    /// Computes the BIP143 sighash to spend a p2wsh transaction for any flag type.
+    pub fn p2wsh_signature_hash(
+        &mut self,
+        input_index: usize,
+        witness_script: &Script,
+        value: Amount,
         sighash_type: EcdsaSighashType,
     ) -> Result<SegwitV0Sighash, Error> {
         let mut enc = SegwitV0Sighash::engine();
-        self.segwit_encode_signing_data_to(
+        self.segwit_v0_encode_signing_data_to(
             &mut enc,
             input_index,
-            script_code,
+            witness_script,
             value,
             sighash_type,
         )?;
@@ -850,9 +985,9 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
     ///
     /// This function can't handle the SIGHASH_SINGLE bug internally, so it returns [`EncodeSigningDataResult`]
     /// that must be handled by the caller (see [`EncodeSigningDataResult::is_sighash_single_bug`]).
-    pub fn legacy_encode_signing_data_to<Write: io::Write, U: Into<u32>>(
+    pub fn legacy_encode_signing_data_to<W: Write + ?Sized, U: Into<u32>>(
         &self,
-        writer: Write,
+        writer: &mut W,
         input_index: usize,
         script_pubkey: &Script,
         sighash_type: U,
@@ -865,7 +1000,11 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
         }
         let sighash_type: u32 = sighash_type.into();
 
-        if is_invalid_use_of_sighash_single(sighash_type, input_index, self.tx.borrow().output.len()) {
+        if is_invalid_use_of_sighash_single(
+            sighash_type,
+            input_index,
+            self.tx.borrow().output.len(),
+        ) {
             // We cannot correctly handle the SIGHASH_SINGLE bug here because usage of this function
             // will result in the data written to the writer being hashed, however the correct
             // handling of the SIGHASH_SINGLE bug is to return the 'one array' - either implement
@@ -873,9 +1012,9 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
             return EncodeSigningDataResult::SighashSingleBug;
         }
 
-        fn encode_signing_data_to_inner<Write: io::Write>(
+        fn encode_signing_data_to_inner<W: Write + ?Sized>(
             self_: &Transaction,
-            mut writer: Write,
+            writer: &mut W,
             input_index: usize,
             script_pubkey: &Script,
             sighash_type: u32,
@@ -929,23 +1068,15 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
                         .iter()
                         .take(input_index + 1) // sign all outputs up to and including this one, but erase
                         .enumerate() // all of them except for this one
-                        .map(
-                            |(n, out)| {
-                                if n == input_index {
-                                    out.clone()
-                                } else {
-                                    TxOut::default()
-                                }
-                            },
-                        );
+                        .map(|(n, out)| if n == input_index { out.clone() } else { TxOut::NULL });
                     output_iter.collect()
                 }
                 EcdsaSighashType::None => vec![],
                 _ => unreachable!(),
             };
             // hash the result
-            tx.consensus_encode(&mut writer)?;
-            sighash_type.to_le_bytes().consensus_encode(&mut writer)?;
+            tx.consensus_encode(writer)?;
+            sighash_type.to_le_bytes().consensus_encode(writer)?;
             Ok(())
         }
 
@@ -1057,32 +1188,37 @@ impl<R: Borrow<Transaction>> SighashCache<R> {
 }
 
 impl<R: BorrowMut<Transaction>> SighashCache<R> {
-    /// When the `SighashCache` is initialized with a mutable reference to a transaction instead of
-    /// a regular reference, this method is available to allow modification to the witnesses.
+    /// Allows modification of witnesses.
     ///
-    /// This allows in-line signing such as
+    /// As a lint against accidental changes to the transaction that would invalidate the cache and
+    /// signatures, `SighashCache` borrows the Transaction so that modifying it is not possible
+    /// without hacks with `UnsafeCell` (which is hopefully a strong indication that something is
+    /// wrong). However modifying witnesses never invalidates the cache and is actually useful - one
+    /// usually wants to put the signature generated for an input into the witness of that input.
+    ///
+    /// This method allows doing exactly that if the transaction is owned by the `SighashCache` or
+    /// borrowed mutably.
+    ///
+    /// # Examples
+    ///
+    /// ```compile_fail
+    /// let mut sighasher = SighashCache::new(&mut tx_to_sign);
+    /// let sighash = sighasher.p2wpkh_signature_hash(input_index, &utxo.script_pubkey, amount, sighash_type)?;
+    ///
+    /// let signature = {
+    ///     // Sign the sighash using secp256k1
+    /// };
+    ///
+    /// *sighasher.witness_mut(input_index).unwrap() = Witness::p2wpkh(&signature, &pk);
     /// ```
-    /// use bitcoin::{absolute, Transaction, Script};
-    /// use bitcoin::sighash::{EcdsaSighashType, SighashCache};
     ///
-    /// let mut tx_to_sign = Transaction { version: 2, lock_time: absolute::LockTime::ZERO, input: Vec::new(), output: Vec::new() };
-    /// let input_count = tx_to_sign.input.len();
+    /// For full signing code see the [`segwit v0`] and [`taproot`] signing examples.
     ///
-    /// let mut sig_hasher = SighashCache::new(&mut tx_to_sign);
-    /// for inp in 0..input_count {
-    ///     let prevout_script = Script::empty();
-    ///     let _sighash = sig_hasher.segwit_signature_hash(inp, prevout_script, 42, EcdsaSighashType::All);
-    ///     // ... sign the sighash
-    ///     sig_hasher.witness_mut(inp).unwrap().push(&Vec::new());
-    /// }
-    /// ```
+    /// [`segwit v0`]: <https://github.com/rust-bitcoin/rust-bitcoin/blob/master/bitcoin/examples/sign-tx-segwit-v0.rs>
+    /// [`taproot`]: <https://github.com/rust-bitcoin/rust-bitcoin/blob/master/bitcoin/examples/sign-tx-taproot.rs>
     pub fn witness_mut(&mut self, input_index: usize) -> Option<&mut Witness> {
         self.tx.borrow_mut().input.get_mut(input_index).map(|i| &mut i.witness)
     }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self { Error::Io(e.kind()) }
 }
 
 /// The `Annex` struct is a slice wrapper enforcing first byte is `0x50`.
@@ -1104,7 +1240,7 @@ impl<'a> Annex<'a> {
 }
 
 impl<'a> Encodable for Annex<'a> {
-    fn consensus_encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
+    fn consensus_encode<W: Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
         encode::consensus_encode_with_size(self.0, w)
     }
 }
@@ -1114,20 +1250,86 @@ fn is_invalid_use_of_sighash_single(sighash: u32, input_index: usize, output_len
     ty == EcdsaSighashType::Single && input_index >= output_len
 }
 
+/// Result of [`SighashCache::legacy_encode_signing_data_to`].
+///
+/// This type forces the caller to handle SIGHASH_SINGLE bug case.
+///
+/// This corner case can't be expressed using standard `Result`,
+/// in a way that is both convenient and not-prone to accidental
+/// mistakes (like calling `.expect("writer never fails")`).
+#[must_use]
+pub enum EncodeSigningDataResult<E> {
+    /// Input data is an instance of `SIGHASH_SINGLE` bug
+    SighashSingleBug,
+    /// Operation performed normally.
+    WriteResult(Result<(), E>),
+}
+
+impl<E> EncodeSigningDataResult<E> {
+    /// Checks for SIGHASH_SINGLE bug returning error if the writer failed.
+    ///
+    /// This method is provided for easy and correct handling of the result because
+    /// SIGHASH_SINGLE bug is a special case that must not be ignored nor cause panicking.
+    /// Since the data is usually written directly into a hasher which never fails,
+    /// the recommended pattern to handle this is:
+    ///
+    /// ```rust
+    /// # use bitcoin::consensus::deserialize;
+    /// # use bitcoin::hashes::{Hash, hex::FromHex};
+    /// # use bitcoin::sighash::{LegacySighash, SighashCache};
+    /// # use bitcoin::Transaction;
+    /// # let mut writer = LegacySighash::engine();
+    /// # let input_index = 0;
+    /// # let script_pubkey = bitcoin::ScriptBuf::new();
+    /// # let sighash_u32 = 0u32;
+    /// # const SOME_TX: &'static str = "0100000001a15d57094aa7a21a28cb20b59aab8fc7d1149a3bdbcddba9c622e4f5f6a99ece010000006c493046022100f93bb0e7d8db7bd46e40132d1f8242026e045f03a0efe71bbb8e3f475e970d790221009337cd7f1f929f00cc6ff01f03729b069a7c21b59b1736ddfee5db5946c5da8c0121033b9b137ee87d5a812d6f506efdd37f0affa7ffc310711c06c7f3e097c9447c52ffffffff0100e1f505000000001976a9140389035a9225b3839e2bbf32d826a1e222031fd888ac00000000";
+    /// # let raw_tx = Vec::from_hex(SOME_TX).unwrap();
+    /// # let tx: Transaction = deserialize(&raw_tx).unwrap();
+    /// let cache = SighashCache::new(&tx);
+    /// if cache.legacy_encode_signing_data_to(&mut writer, input_index, &script_pubkey, sighash_u32)
+    ///         .is_sighash_single_bug()
+    ///         .expect("writer can't fail") {
+    ///     // use a hash value of "1", instead of computing the actual hash due to SIGHASH_SINGLE bug
+    /// }
+    /// ```
+    pub fn is_sighash_single_bug(self) -> Result<bool, E> {
+        match self {
+            EncodeSigningDataResult::SighashSingleBug => Ok(true),
+            EncodeSigningDataResult::WriteResult(Ok(())) => Ok(false),
+            EncodeSigningDataResult::WriteResult(Err(e)) => Err(e),
+        }
+    }
+
+    /// Maps a `Result<T, E>` to `Result<T, F>` by applying a function to a
+    /// contained [`Err`] value, leaving an [`Ok`] value untouched.
+    ///
+    /// Like [`Result::map_err`].
+    pub fn map_err<E2, F>(self, f: F) -> EncodeSigningDataResult<E2>
+    where
+        F: FnOnce(E) -> E2,
+    {
+        match self {
+            EncodeSigningDataResult::SighashSingleBug => EncodeSigningDataResult::SighashSingleBug,
+            EncodeSigningDataResult::WriteResult(Err(e)) =>
+                EncodeSigningDataResult::WriteResult(Err(f(e))),
+            EncodeSigningDataResult::WriteResult(Ok(o)) =>
+                EncodeSigningDataResult::WriteResult(Ok(o)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
+    use hashes::HashEngine;
+    use hex::{test_hex_unwrap as hex, FromHex};
+
     use super::*;
-    use crate::address::Address;
     use crate::blockdata::locktime::absolute;
+    use crate::blockdata::transaction;
     use crate::consensus::deserialize;
-    use crate::crypto::key::PublicKey;
     use crate::crypto::sighash::{LegacySighash, TapSighash};
-    use crate::hashes::hex::FromHex;
-    use crate::hashes::HashEngine;
-    use crate::internal_macros::hex;
-    use crate::network::constants::Network;
     use crate::taproot::TapLeafHash;
 
     extern crate serde_json;
@@ -1138,10 +1340,10 @@ mod tests {
 
         // We need a tx with more inputs than outputs.
         let tx = Transaction {
-            version: 1,
+            version: transaction::Version::ONE,
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn::default(), TxIn::default()],
-            output: vec![TxOut::default()],
+            output: vec![TxOut::NULL],
         };
         let script = ScriptBuf::new();
         let cache = SighashCache::new(&tx);
@@ -1197,8 +1399,7 @@ mod tests {
     #[test]
     fn test_tap_sighash_hash() {
         let bytes = hex!("00011b96877db45ffa23b307e9f0ac87b80ef9a80b4c5f0db3fbe734422453e83cc5576f3d542c5d4898fb2b696c15d43332534a7c1d1255fda38993545882df92c3e353ff6d36fbfadc4d168452afd8467f02fe53d71714fcea5dfe2ea759bd00185c4cb02bc76d42620393ca358a1a713f4997f9fc222911890afb3fe56c6a19b202df7bffdcfad08003821294279043746631b00e2dc5e52a111e213bbfe6ef09a19428d418dab0d50000000000");
-        let expected =
-            hex!("04e808aad07a40b3767a1442fead79af6ef7e7c9316d82dec409bb31e77699b0");
+        let expected = hex!("04e808aad07a40b3767a1442fead79af6ef7e7c9316d82dec409bb31e77699b0");
         let mut enc = TapSighash::engine();
         enc.input(&bytes);
         let hash = TapSighash::from_engine(enc);
@@ -1326,7 +1527,7 @@ mod tests {
     #[rustfmt::skip] // Allow long function call `taproot_signature_hash`.
     fn test_sighash_errors() {
         let dumb_tx = Transaction {
-            version: 0,
+            version: transaction::Version::TWO,
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn::default()],
             output: vec![],
@@ -1338,23 +1539,23 @@ mod tests {
         let empty_prevouts : Prevouts<TxOut> = Prevouts::All(&empty_vec);
         assert_eq!(
             c.taproot_signature_hash(0, &empty_prevouts, None, None, TapSighashType::All),
-            Err(Error::PrevoutsSize)
+            Err(Error::PrevoutsSize(PrevoutsSizeError))
         );
-        let two = vec![TxOut::default(), TxOut::default()];
+        let two = vec![TxOut::NULL, TxOut::NULL];
         let too_many_prevouts = Prevouts::All(&two);
         assert_eq!(
             c.taproot_signature_hash(0, &too_many_prevouts, None, None, TapSighashType::All),
-            Err(Error::PrevoutsSize)
+            Err(Error::PrevoutsSize(PrevoutsSizeError))
         );
-        let tx_out = TxOut::default();
+        let tx_out = TxOut::NULL;
         let prevout = Prevouts::One(1, &tx_out);
         assert_eq!(
             c.taproot_signature_hash(0, &prevout, None, None, TapSighashType::All),
-            Err(Error::PrevoutKind)
+            Err(Error::PrevoutsKind(PrevoutsKindError))
         );
         assert_eq!(
             c.taproot_signature_hash(0, &prevout, None, None, TapSighashType::AllPlusAnyoneCanPay),
-            Err(Error::PrevoutIndex)
+            Err(Error::PrevoutsIndex(PrevoutsIndexError::InvalidOneIndex))
         );
         assert_eq!(
             c.taproot_signature_hash(10, &prevout, None, None, TapSighashType::AllPlusAnyoneCanPay),
@@ -1372,7 +1573,7 @@ mod tests {
             })
         );
         assert_eq!(
-            c.legacy_signature_hash(10, Script::empty(), 0u32),
+            c.legacy_signature_hash(10, Script::new(), 0u32),
             Err(Error::IndexOutOfInputsBounds {
                 index: 10,
                 inputs_size: 1
@@ -1468,7 +1669,7 @@ mod tests {
             #[serde(rename = "scriptPubKey")]
             script_pubkey: ScriptBuf,
             #[serde(rename = "amountSats")]
-            value: u64,
+            value: Amount,
         }
 
         #[derive(serde::Deserialize)]
@@ -1596,7 +1797,7 @@ mod tests {
             };
 
             // tests
-            let keypair = secp256k1::KeyPair::from_secret_key(secp, &internal_priv_key);
+            let keypair = secp256k1::Keypair::from_secret_key(secp, &internal_priv_key);
             let (internal_key, _parity) = XOnlyPublicKey::from_keypair(&keypair);
             let tweak = TapTweakHash::from_key_and_tweak(internal_key, merkle_root);
             let tweaked_keypair = keypair.add_xonly_tweak(secp, &tweak.to_scalar()).unwrap();
@@ -1615,7 +1816,7 @@ mod tests {
                 .taproot_signature_hash(tx_ind, &Prevouts::All(&utxos), None, None, hash_ty)
                 .unwrap();
 
-            let msg = secp256k1::Message::from(sighash);
+            let msg = secp256k1::Message::from_digest(sighash.to_byte_array());
             let key_spend_sig = secp.sign_schnorr_with_aux_rand(&msg, &tweaked_keypair, &[0u8; 32]);
 
             assert_eq!(expected.internal_pubkey, internal_key);
@@ -1662,14 +1863,9 @@ mod tests {
         for s in sht_mistakes {
             assert_eq!(
                 TapSighashType::from_str(s).unwrap_err().to_string(),
-                format!("Unrecognized SIGHASH string '{}'", s)
+                format!("unrecognized SIGHASH string '{}'", s)
             );
         }
-    }
-
-    fn p2pkh_hex(pk: &str) -> ScriptBuf {
-        let pk: PublicKey = PublicKey::from_str(pk).unwrap();
-        Address::p2pkh(&pk, Network::Qtum).script_pubkey()
     }
 
     #[test]
@@ -1683,29 +1879,33 @@ mod tests {
             ),
         ).unwrap();
 
-        let witness_script =
-            p2pkh_hex("025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee6357");
-        let value = 600_000_000;
+        let spk = ScriptBuf::from_hex("00141d0f172a0ecb48aee1be1f2687d2963ae33f71a1").unwrap();
+        let value = Amount::from_sat(600_000_000);
 
         let mut cache = SighashCache::new(&tx);
         assert_eq!(
-            cache.segwit_signature_hash(1, &witness_script, value, EcdsaSighashType::All).unwrap(),
-            "c37af31116d1b27caf68aae9e3ac82f1477929014d5b917657d0eb49478cb670".parse::<SegwitV0Sighash>().unwrap(),
+            cache.p2wpkh_signature_hash(1, &spk, value, EcdsaSighashType::All).unwrap(),
+            "c37af31116d1b27caf68aae9e3ac82f1477929014d5b917657d0eb49478cb670"
+                .parse::<SegwitV0Sighash>()
+                .unwrap(),
         );
 
         let cache = cache.segwit_cache();
         // Parse hex into Vec because BIP143 test vector displays forwards but our sha256d::Hash displays backwards.
         assert_eq!(
             cache.prevouts.as_byte_array(),
-            &Vec::from_hex("96b827c8483d4e9b96712b6713a7b68d6e8003a781feba36c31143470b4efd37").unwrap()[..],
+            &Vec::from_hex("96b827c8483d4e9b96712b6713a7b68d6e8003a781feba36c31143470b4efd37")
+                .unwrap()[..],
         );
         assert_eq!(
             cache.sequences.as_byte_array(),
-            &Vec::from_hex("52b0a642eea2fb7ae638c36f6252b6750293dbe574a806984b8e4d8548339a3b").unwrap()[..],
+            &Vec::from_hex("52b0a642eea2fb7ae638c36f6252b6750293dbe574a806984b8e4d8548339a3b")
+                .unwrap()[..],
         );
         assert_eq!(
             cache.outputs.as_byte_array(),
-            &Vec::from_hex("863ef3e1a92afbfdb97f31ad0fc7683ee943e9abcf2501590ff8f6551f47e5e5").unwrap()[..],
+            &Vec::from_hex("863ef3e1a92afbfdb97f31ad0fc7683ee943e9abcf2501590ff8f6551f47e5e5")
+                .unwrap()[..],
         );
     }
 
@@ -1719,40 +1919,47 @@ mod tests {
             ),
         ).unwrap();
 
-        let witness_script =
-            p2pkh_hex("03ad1d8e89212f0b92c74d23bb710c00662ad1470198ac48c43f7d6f93a2a26873");
-        let value = 1_000_000_000;
+        let redeem_script =
+            ScriptBuf::from_hex("001479091972186c449eb1ded22b78e40d009bdf0089").unwrap();
+        let value = Amount::from_sat(1_000_000_000);
 
         let mut cache = SighashCache::new(&tx);
         assert_eq!(
-            cache.segwit_signature_hash(0, &witness_script, value, EcdsaSighashType::All).unwrap(),
-            "64f3b0f4dd2bb3aa1ce8566d220cc74dda9df97d8490cc81d89d735c92e59fb6".parse::<SegwitV0Sighash>().unwrap(),
+            cache.p2wpkh_signature_hash(0, &redeem_script, value, EcdsaSighashType::All).unwrap(),
+            "64f3b0f4dd2bb3aa1ce8566d220cc74dda9df97d8490cc81d89d735c92e59fb6"
+                .parse::<SegwitV0Sighash>()
+                .unwrap(),
         );
 
         let cache = cache.segwit_cache();
         // Parse hex into Vec because BIP143 test vector displays forwards but our sha256d::Hash displays backwards.
         assert_eq!(
             cache.prevouts.as_byte_array(),
-            &Vec::from_hex("b0287b4a252ac05af83d2dcef00ba313af78a3e9c329afa216eb3aa2a7b4613a").unwrap()[..],
+            &Vec::from_hex("b0287b4a252ac05af83d2dcef00ba313af78a3e9c329afa216eb3aa2a7b4613a")
+                .unwrap()[..],
         );
         assert_eq!(
             cache.sequences.as_byte_array(),
-            &Vec::from_hex("18606b350cd8bf565266bc352f0caddcf01e8fa789dd8a15386327cf8cabe198").unwrap()[..],
+            &Vec::from_hex("18606b350cd8bf565266bc352f0caddcf01e8fa789dd8a15386327cf8cabe198")
+                .unwrap()[..],
         );
         assert_eq!(
             cache.outputs.as_byte_array(),
-            &Vec::from_hex("de984f44532e2173ca0d64314fcefe6d30da6f8cf27bafa706da61df8a226c83").unwrap()[..],
+            &Vec::from_hex("de984f44532e2173ca0d64314fcefe6d30da6f8cf27bafa706da61df8a226c83")
+                .unwrap()[..],
         );
     }
 
-    #[test]
-    fn bip143_p2wsh_nested_in_p2sh() {
-        let tx = deserialize::<Transaction>(
-            &hex!(
+    // Note, if you are looking at the test vectors in BIP-143 and wondering why there is a `cf`
+    // prepended to all the script_code hex it is the length byte, it gets added when we consensus
+    // encode a script.
+    fn bip143_p2wsh_nested_in_p2sh_data() -> (Transaction, ScriptBuf, Amount) {
+        let tx = deserialize::<Transaction>(&hex!(
             "010000000136641869ca081e70f394c6948e8af409e18b619df2ed74aa106c1ca29787b96e0100000000\
              ffffffff0200e9a435000000001976a914389ffce9cd9ae88dcc0631e88a821ffdbe9bfe2688acc0832f\
-             05000000001976a9147480a33f950689af511e6e84c138dbbd3c3ee41588ac00000000"),
-        ).unwrap();
+             05000000001976a9147480a33f950689af511e6e84c138dbbd3c3ee41588ac00000000"
+        ))
+        .unwrap();
 
         let witness_script = ScriptBuf::from_hex(
             "56210307b8ae49ac90a048e9b53357a2354b3334e9c8bee813ecb98e99a7e07e8c3ba32103b28f0c28\
@@ -1760,29 +1967,76 @@ mod tests {
              9781957b8c0ac1dfe69f492580ca4195f50376ba4a21033400f6afecb833092a9a21cfdf1ed1376e58\
              c5d1f47de74683123987e967a8f42103a6d48b1131e94ba04d9737d61acdaa1322008af9602b3b1486\
              2c07a1789aac162102d8b661b0b3302ee2f162b09e07a55ad5dfbe673a9f01d9f0c19617681024306b\
-             56ae"
-        ).unwrap();
-        let value = 987654321;
+             56ae",
+        )
+        .unwrap();
 
+        let value = Amount::from_sat(987_654_321);
+        (tx, witness_script, value)
+    }
+
+    #[test]
+    fn bip143_p2wsh_nested_in_p2sh_sighash_type_all() {
+        let (tx, witness_script, value) = bip143_p2wsh_nested_in_p2sh_data();
         let mut cache = SighashCache::new(&tx);
         assert_eq!(
-            cache.segwit_signature_hash(0, &witness_script, value, EcdsaSighashType::All).unwrap(),
-            "185c0be5263dce5b4bb50a047973c1b6272bfbd0103a89444597dc40b248ee7c".parse::<SegwitV0Sighash>().unwrap(),
+            cache.p2wsh_signature_hash(0, &witness_script, value, EcdsaSighashType::All).unwrap(),
+            "185c0be5263dce5b4bb50a047973c1b6272bfbd0103a89444597dc40b248ee7c"
+                .parse::<SegwitV0Sighash>()
+                .unwrap(),
         );
+
+        // We only test the cache intermediate values for `EcdsaSighashType::All` because they are
+        // not the same as the BIP test vectors for all the rest of the sighash types. These fields
+        // are private so it does not effect sighash cache usage, we do test against the produced
+        // sighash for all sighash types.
 
         let cache = cache.segwit_cache();
         // Parse hex into Vec because BIP143 test vector displays forwards but our sha256d::Hash displays backwards.
         assert_eq!(
             cache.prevouts.as_byte_array(),
-            &Vec::from_hex("74afdc312af5183c4198a40ca3c1a275b485496dd3929bca388c4b5e31f7aaa0").unwrap()[..],
+            &Vec::from_hex("74afdc312af5183c4198a40ca3c1a275b485496dd3929bca388c4b5e31f7aaa0")
+                .unwrap()[..],
         );
         assert_eq!(
             cache.sequences.as_byte_array(),
-            &Vec::from_hex("3bb13029ce7b1f559ef5e747fcac439f1455a2ec7c5f09b72290795e70665044").unwrap()[..],
+            &Vec::from_hex("3bb13029ce7b1f559ef5e747fcac439f1455a2ec7c5f09b72290795e70665044")
+                .unwrap()[..],
         );
         assert_eq!(
             cache.outputs.as_byte_array(),
-            &Vec::from_hex("bc4d309071414bed932f98832b27b4d76dad7e6c1346f487a8fdbb8eb90307cc").unwrap()[..],
+            &Vec::from_hex("bc4d309071414bed932f98832b27b4d76dad7e6c1346f487a8fdbb8eb90307cc")
+                .unwrap()[..],
         );
+    }
+
+    macro_rules! check_bip143_p2wsh_nested_in_p2sh {
+        ($($test_name:ident, $sighash_type:ident, $sighash:literal);* $(;)?) => {
+            $(
+                #[test]
+                fn $test_name() {
+                    use EcdsaSighashType::*;
+
+                    let (tx, witness_script, value) = bip143_p2wsh_nested_in_p2sh_data();
+                    let mut cache = SighashCache::new(&tx);
+                    assert_eq!(
+                        cache
+                            .p2wsh_signature_hash(0, &witness_script, value, $sighash_type)
+                            .unwrap(),
+                        $sighash
+                            .parse::<SegwitV0Sighash>()
+                            .unwrap(),
+                    );
+                }
+            )*
+        }
+    }
+    check_bip143_p2wsh_nested_in_p2sh! {
+        // EcdsaSighashType::All tested above.
+        bip143_p2wsh_nested_in_p2sh_sighash_none, None, "e9733bc60ea13c95c6527066bb975a2ff29a925e80aa14c213f686cbae5d2f36";
+        bip143_p2wsh_nested_in_p2sh_sighash_single, Single, "1e1f1c303dc025bd664acb72e583e933fae4cff9148bf78c157d1e8f78530aea";
+        bip143_p2wsh_nested_in_p2sh_sighash_all_plus_anyonecanpay, AllPlusAnyoneCanPay, "2a67f03e63a6a422125878b40b82da593be8d4efaafe88ee528af6e5a9955c6e";
+        bip143_p2wsh_nested_in_p2sh_sighash_none_plus_anyonecanpay, NonePlusAnyoneCanPay, "781ba15f3779d5542ce8ecb5c18716733a5ee42a6f51488ec96154934e2c890a";
+        bip143_p2wsh_nested_in_p2sh_sighash_single_plus_anyonecanpay, SinglePlusAnyoneCanPay, "511e8e52ed574121fc1b654970395502128263f62662e076dc6baf05c2e6a99b";
     }
 }

@@ -18,10 +18,10 @@ changes to this document in a pull request.
   * [Peer review](#peer-review)
   * [Repository maintainers](#repository-maintainers)
 - [Coding conventions](#coding-conventions)
-  * [Formatting](#formatting)
-  * [MSRV](#msrv)
   * [Naming conventions](#naming-conventions)
+  * [Upgrading dependencies](#upgrading-dependencies)
   * [Unsafe code](#unsafe-code)
+  * [Policy](#policy)
 - [Security](#security)
 - [Testing](#testing)
 - [Going further](#going-further)
@@ -149,7 +149,7 @@ grammar fixes.
 
 Pull request merge requirements:
 - all CI test should pass,
-- at least two "accepts"/ACKs from the repository maintainers
+- at least two "accepts"/ACKs from the repository maintainers (see "refactor carve-out").
 - no reasonable "rejects"/NACKs from anybody who reviewed the code.
 
 Current list of the project maintainers:
@@ -163,16 +163,36 @@ Current list of the project maintainers:
 - [Riccardo Casatta](https://github.com/RCasatta)
 - [Tobin Harding](https://github.com/tcharding)
 
+#### Refactor carve-out
+
+The repository is going through heavy refactoring and "trivial" API redesign
+(eg, rename `Foo::empty` to `Foo::new`) as we push towards API stabilization. As
+such reviewers are either bored or overloaded with notifications, hence we have
+created a carve out to the 2-ACK rule.
+
+A PR may be considered for merge if it has a single ACK and has sat open for at
+least two weeks with no comments, questions, or NACKs.
+
+#### One ACK carve-out
+
+We reserve the right to merge PRs with a single ACK [0], at any time, if they match
+any of the following conditions:
+
+1. PR only touches CI i.e, only changes any of the `test.sh` scripts and/or
+   stuff in `.github/workflows`.
+2. Non-content changing documentation fixes i.e., grammar/typos, spelling, full
+   stops, capital letters. Any change with more substance must still get two
+   ACKs.
+3. Code moves that do not change the API e.g., moving error types to a private
+   submodule and re-exporting them from the original module. Must not include
+   any code changes except to import paths. This rule is more restrictive than
+   the refactor carve-out. It requires absolutely no change to the public API.
+
+[0] - Obviously author and ACK'er must not be the same person.
 
 ## Coding conventions
 
 Library reflects Bitcoin Core approach whenever possible.
-
-### Formatting
-
-The repository currently uses `rustfmt` (WIP, some directories are excluded). We use nightly
-features so to run the formatter use `cargo +nightly fmt`. (Remember that your editor may be
-configured to fmt with a stable toolchain, this will result in many unwanted changes.)
 
 ### Naming conventions
 
@@ -182,12 +202,220 @@ in Bitcoin Core, with the following exceptions:
   snake_case for fields and variants);
 - omit `C`-prefixes.
 
+### Upgrading dependencies
+
+If your change requires a dependency to be upgraded you must do the following:
+
+1. Modify `Cargo.toml`
+2. Copy `Cargo-minimal.lock` to `Cargo.lock`
+3. Trigger cargo to update the required entries in the lock file - use `--precise` using the minimum version number that works
+4. Test your change
+5. Copy `Cargo.lock` to `Cargo-minimal.lock`
+6. Update `Cargo-recent.lock` if it is also behind
+7. Commit both lock files together with `Cargo.toml` and your code changes
+
 ### Unsafe code
 
 Use of `unsafe` code is prohibited unless there is a unanimous decision among
 library maintainers on the exclusion from this rule. In such cases there is a
 requirement to test unsafe code with sanitizers including Miri.
 
+
+### Policy
+
+We have various `rust-bitcoin` specific coding styles and conventions that are
+grouped here loosely under the term 'policy'. These are things we try to adhere
+to but that you should not need to worry too much about if you are a new
+contributor. Think of this as a place to collect group knowledge that exists in
+the various PRs over the last few years.
+
+#### Import statements
+
+We use the following style for import statements, see
+(https://github.com/rust-bitcoin/rust-bitcoin/discussions/2088) for the discussion that led to this.
+
+```rust
+
+// Modules first, as they are part of the project's structure.
+pub mod aa_this;
+mod bb_private;
+pub mod cc_that;
+
+// Private imports, rustfmt will sort and merge them correctly.
+use crate::aa_this::{This, That};
+use crate::bb_that;
+
+// Public re-exports.
+#[rustfmt::skip] // Keeps public re-exports separate, because of this we have to sort manually.
+pub use {
+    crate::aa_aa_this,
+    crate::bb_bb::That,
+}
+```
+
+#### Return `Self`
+
+Use `Self` as the return type instead of naming the type. When constructing the return value use
+`Self` or the type name, whichever you prefer.
+
+```rust
+/// A counter that is always smaller than 100.
+pub struct Counter(u32);
+
+impl Counter {
+    /// Constructs a new `Counter`.
+    pub fn new() -> Self { Self(0) }
+
+    /// Returns a counter if it is possible to create one from x.
+    pub fn maybe(x: u32) -> Option<Self> {
+        match x {
+            x if x >= 100 => None,
+            c => Some(Counter(c)),
+        }
+    }
+}
+
+impl TryFrom<u32> for Counter {
+    type Error = TooBigError;
+
+    fn try_from(x: u32) -> Result<Self, Self::Error> {
+        if x >= 100 {
+            return Err(TooBigError);
+        }
+        Ok(Counter(x))
+    }
+}
+```
+
+When constructing the return value for error enums use `Self`.
+
+```rust
+impl From<foo::Error> for LongDescriptiveError {
+    fn from(e: foo::Error) -> Self { Self::Foo(e) }
+}
+```
+
+
+#### Errors
+
+Return as much context as possible with errors e.g., if an error was encountered parsing a string
+include the string in the returned error type. If a function consumes costly-to-compute input
+(allocations are also considered costly) it should return the input back in the error type.
+
+More specifically an error should
+
+- be `non_exhaustive` unless we _really_ never want to change it.
+- have private fields unless we are very confident they won't change.
+- derive `Debug, Clone, PartialEq, Eq` (and `Copy` iff not `non_exhaustive`).
+- implement Display using `write_err!()` macro if a variant contains an inner error source.
+- have `Error` suffix
+- implement `std::error::Error` if they are public (feature gated on "std").
+
+```rust
+/// Documentation for the `Error` type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]  // Add liberally; if the error type may ever have new variants added.
+pub enum Error {
+    /// Documentation for variant A.
+    A,
+    /// Documentation for variant B.
+    B,
+}
+```
+
+
+#### Rustdocs
+
+Be liberal with references to BIPs or other documentation; the aim is that devs can learn about
+Bitcoin by hacking on this codebase as opposed to having to learn about Bitcoin first and then start
+hacking on this codebase. Consider the following format, not all sections will be required for all types.
+
+
+```rust
+/// The Bitcoin foobar.
+///
+/// Contains all the data used when passing a foobar around the Bitcoin network.
+///
+/// <details>
+/// <summary>FooBar Original Design</summary>
+///
+/// The foobar was introduced in Bitcoin x.y.z to increase the amount of foo in bar.
+///
+/// </details>
+///
+/// ### Relevant BIPs
+///
+/// * [BIP X - FooBar in Bitcoin](https://github.com/bitcoin/bips/blob/master/bip-0000.mediawiki)
+pub struct FooBar {
+    /// The version in use.
+    pub version: Version
+}
+```
+
+Do use rustdoc subheadings. Do put an empty newline below each heading e.g.,
+
+```rust
+impl FooBar {
+    /// Constructs a `FooBar` from a [`Baz`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `Baz` is not ...
+    ///
+    /// # Panics
+    ///
+    /// If the `Baz`, converted to a `usize`, is out of bounds.
+    pub fn from_baz(baz: Baz) -> Result<Self, Error> {
+        ...
+    }
+}
+```
+
+Add Panics section if any input to the function can trigger a panic.
+
+Generally we prefer to have non-panicking APIs but it is impractical in some cases. If you're not
+sure, feel free to ask. If we determine panicking is more practical it must be documented. Internal
+panics that could theoretically occur because of bugs in our code must not be documented.
+
+
+#### Derives
+
+We try to use standard set of derives if it makes sense:
+
+```
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Foo {
+    Bar,
+    Baz,
+}
+```
+
+For types that do should not form a total or partial order, or that technically do but it does not
+make sense to compare them, we use the `Ordered` trait from the
+[`ordered`](https://crates.io/crates/ordered) crate. See `absolute::LockTime` for an example.
+
+For error types you likely want to use `#[derive(Debug, Clone, PartialEq, Eq)]`.
+
+See [Errors](#errors) section.
+
+
+#### Attributes
+
+- `#[track_caller]`: Used on functions that panic on invalid arguments
+  (see https://rustc-dev-guide.rust-lang.org/backend/implicit-caller-location.html)
+
+- `#[cfg(rust_v_1_60)]`: Used to guard code that should only be built in if the toolchain is
+  compatible. These configuration conditionals are set at build time in `bitcoin/build.rs`. New
+  version attributes may be added as needed.
+
+
+#### Licensing
+
+We use SPDX license tags, all files should start with
+
+```
+// SPDX-License-Identifier: CC0-1.0
+```
 
 ## Security
 
@@ -208,7 +436,7 @@ easy and good test coverage of the codebase is an important goal. Refactoring
 the project to enable fine-grained unit testing is also an ongoing effort.
 
 Various methods of testing are in use (e.g. fuzzing, mutation), please see
-the [readme](./REAME.md) for more information.
+the [readme](./README.md) for more information.
 
 
 ## Going further
