@@ -34,9 +34,9 @@ hashes = { path = "../hashes", package = "qtum_hashes", version = "0.13.0-qtum",
 hex = { package = "hex-conservative", version = "0.1.1", default-features = false, features = ["alloc"] }
 hex_lit = "0.1.1"
 internals = { path = "../internals", package = "qtum-internals", version = "0.2.0-qtum" }
-io = { package = "bitcoin-io", version = "0.1", default-features = false, features = ["alloc"] }
+io = { path = "../io", package = "bitcoin-io", version = "0.1", default-features = false, features = ["alloc"] }
 secp256k1 = { version = "0.28.0", default-features = false, features = ["hashes", "alloc"] }
-units = { package = "bitcoin-units", version = "0.1.0", default-features = false, features = ["alloc"] }
+units = { path = "../units", package = "bitcoin-units", version = "0.1.0", default-features = false, features = ["alloc"] }
 
 # Qtum-specific libs
 ckb-types = "0.112.1"
