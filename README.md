@@ -2,8 +2,6 @@
 
 This repository was forked from [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) in an effort to work with Qtum in Rust.
 
-**WORK IN PROGRESS.**
-
 ### Supports (or should support)
 
 * De/serialization of Qtum protocol network messages
